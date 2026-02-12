@@ -304,11 +304,15 @@ curl http://localhost:8080/api/tasks/<task-id>
 }
 ```
 
-### Fog Config (~/.config/fog/)
+### Fog State (`~/.fog/`)
 
-Tasks are stored in `~/.config/fog/tasks/`
+- SQLite database: `~/.fog/fog.db`
+- Master encryption key (local file): `~/.fog/master.key`
+- GitHub PAT: encrypted at rest in SQLite (AES-GCM)
 
-Each task is a JSON file: `{task-id}.json`
+Notes:
+- PAT is persisted as encrypted ciphertext only (no raw token on disk).
+- The local master key is file-based (no OS keychain dependency).
 
 ## Safety Rules
 
@@ -324,7 +328,7 @@ Uses GitHub CLI (`gh`):
 - Requires `gh auth login`
 - Deterministic title: `feat: {prompt}`
 - Templated body with task metadata
-- No GitHub tokens stored by Fog
+- If PAT-based repo features are used, Fog stores an encrypted PAT locally
 
 ## Examples
 

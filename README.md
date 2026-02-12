@@ -146,6 +146,12 @@ Duration: 2m 30s
 }
 ```
 
+### fog state (~/.fog)
+
+- State DB: `~/.fog/fog.db`
+- Local encryption key: `~/.fog/master.key`
+- GitHub PAT (if configured): encrypted at rest in SQLite
+
 ## 🎯 Use Cases
 
 ### Solo Developer
