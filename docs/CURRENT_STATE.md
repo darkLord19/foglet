@@ -77,13 +77,16 @@ This document reflects the currently implemented product surface in this reposit
   - loads a desktop-focused UI over existing Fog HTTP APIs
 - Desktop UI supports:
   - session list and follow-up workflow
+  - session timeline with run history and run events
+  - timeline quick actions for PR/branch/compare links
   - new session composer (`repo`, `tool`, `model`, `branch_name`, `autopr`, prompt)
   - repo discover/import
   - settings update (`default_tool`, `branch_prefix`)
   - cloud URL save + pair + unpair
 - Current status:
   - Desktop build uses `desktop` build tag and Wails CLI workflow.
-  - AppImage packaging pipeline is not wired yet.
+  - Linux AppImage packaging is wired into release artifacts via optional build flag.
+  - desktop frontend smoke tests cover API-mocked UI flows.
 - Session API defaults:
   - `POST /api/sessions` runs async by default and returns session/run ids
   - `POST /api/sessions/{id}/runs` runs async by default
@@ -163,7 +166,7 @@ State details:
   - `sessions`
   - `runs`
   - `run_events`
-  This is the persistence base for the upcoming desktop session UI and follow-up workflow.
+  This is used by session APIs, follow-up workflow, and desktop timeline UI.
 - Cloud foundation uses a separate SQLite file (`fogcloud.db`) and key file (`cloud.key`) in its configured data dir.
 - Local fogd cloud pairing state is persisted in `~/.fog/fog.db`:
   - settings: `cloud_url`, `cloud_device_id`
@@ -173,10 +176,12 @@ State details:
 
 - Release artifact builder script:
   - `scripts/release/build-artifacts.sh`
+  - optional `fogapp` AppImage build via `BUILD_FOGAPP_APPIMAGE=true`
+  - AppImage hashes are appended to the release checksums file
 - Homebrew formula generator:
   - `scripts/release/generate-homebrew-formula.sh`
 - Release workflow:
-  - `.github/workflows/release.yml` (tag `v*`)
+  - `.github/workflows/release.yml` (tag `v*`) publishes tarballs + AppImage assets
 - Linux installer:
   - `scripts/install-linux.sh` (checksum verify + version pin)
 
@@ -192,7 +197,6 @@ Default tool must be explicitly configured, otherwise API/Slack/CLI task creatio
 ## What is intentionally not implemented yet
 
 - Full OAuth onboarding (PAT-only today).
-- Fog desktop AppImage packaging/release pipeline.
 - PR comment rerun loop.
 - Containerized task isolation.
 - Production-ready team/multi-user auth model.

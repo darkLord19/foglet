@@ -201,6 +201,23 @@ Expected checks:
 - app starts and `fogd` is auto-started when not already running
 - desktop dashboard renders sessions/repo/settings/cloud panels
 - new session + follow-up actions work the same as web UI
+- session timeline renders runs/events and branch/compare actions
+
+## 6.2 Desktop frontend E2E smoke tests (headless)
+
+Prerequisites:
+- Chrome/Chromium installed in PATH (`google-chrome`, `google-chrome-stable`, `chromium`, or `chromium-browser`)
+
+Run:
+
+```bash
+GOCACHE=/tmp/go-build go test ./cmd/fogapp -run TestDesktopFrontendSmokeFlows -count=1
+```
+
+Expected checks:
+- mocked API server receives create-session + follow-up + discover/import + settings + cloud save calls
+- frontend timeline loads initial run/events and action buttons
+- test skips automatically if no Chrome/Chromium binary is available
 
 ## 7. Slack HTTP mode test
 
@@ -282,11 +299,16 @@ From repo root:
 
 ```bash
 scripts/release/build-artifacts.sh v0.0.0-test dist
+
+# optional: include fogapp AppImage artifact
+BUILD_FOGAPP_APPIMAGE=true scripts/release/build-artifacts.sh v0.0.0-test dist
 ```
 
 Expected checks:
 - archives generated for linux/darwin amd64/arm64
 - checksum file generated
+- with `BUILD_FOGAPP_APPIMAGE=true`, `dist/fogapp_0.0.0-test_linux_amd64.AppImage` is generated
+- AppImage hash is included in `dist/wtx_0.0.0-test_checksums.txt`
 - Homebrew formula generation succeeds:
 
 ```bash

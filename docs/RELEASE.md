@@ -13,8 +13,8 @@ Each archive includes:
 - `fogcloud`
 - shell completions
 
-Current scope:
-- Wails desktop app (`fogapp`) is not part of release artifacts yet.
+Optional desktop artifact:
+- `fogapp_<version>_linux_amd64.AppImage` (built when `BUILD_FOGAPP_APPIMAGE=true`)
 
 ## Local release build
 
@@ -23,11 +23,19 @@ scripts/release/build-artifacts.sh v0.2.0 dist
 
 # or via Makefile
 make release-artifacts RELEASE_TAG=v0.2.0
+
+# include fogapp AppImage in dist/
+BUILD_FOGAPP_APPIMAGE=true scripts/release/build-artifacts.sh v0.2.0 dist
+
+# AppImage-only helper
+make release-fogapp-appimage RELEASE_TAG=v0.2.0
 ```
 
 Outputs:
 - `dist/wtx_<version>_<os>_<arch>.tar.gz`
 - `dist/wtx_<version>_checksums.txt`
+- optional `dist/fogapp_<version>_linux_amd64.AppImage`
+- optional `dist/fogapp_<version>_linux_amd64.AppImage.sha256`
 
 ## Generate Homebrew formula
 
@@ -57,8 +65,13 @@ Workflow steps:
 2. Generate Homebrew formula (`scripts/release/generate-homebrew-formula.sh`)
 3. Upload release assets:
    - tar.gz archives
+   - fogapp AppImage + AppImage sha256
    - checksums file
    - generated `wtx.rb`
+
+Desktop packaging notes:
+- CI installs `libgtk-3-dev`, `libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, and `appimagetool`.
+- AppImage build currently targets Linux `amd64`.
 
 ## Optional automatic Homebrew tap update
 

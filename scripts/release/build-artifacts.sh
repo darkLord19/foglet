@@ -89,11 +89,26 @@ for target in "${TARGETS[@]}"; do
   tar -C "${WORK_DIR}" -czf "${OUTPUT_DIR}/${ARCHIVE_NAME}" "wtx_${VERSION}_${OS}_${ARCH}"
 done
 
+if [[ "${BUILD_FOGAPP_APPIMAGE:-false}" == "true" ]]; then
+  echo "building fogapp AppImage artifact"
+  chmod +x "${ROOT_DIR}/scripts/release/build-fogapp-appimage.sh"
+  "${ROOT_DIR}/scripts/release/build-fogapp-appimage.sh" "${VERSION_TAG}" "${OUTPUT_DIR}"
+fi
+
 CHECKSUM_FILE="${OUTPUT_DIR}/wtx_${VERSION}_checksums.txt"
 : > "${CHECKSUM_FILE}"
 for archive in "${OUTPUT_DIR}"/wtx_"${VERSION}"_*.tar.gz; do
   base="$(basename "${archive}")"
   sum="$(checksum_file "${archive}")"
+  echo "${sum}  ${base}" >> "${CHECKSUM_FILE}"
+done
+
+for appimage in "${OUTPUT_DIR}"/fogapp_"${VERSION}"_*.AppImage; do
+  if [[ ! -f "${appimage}" ]]; then
+    continue
+  fi
+  base="$(basename "${appimage}")"
+  sum="$(checksum_file "${appimage}")"
   echo "${sum}  ${base}" >> "${CHECKSUM_FILE}"
 done
 
