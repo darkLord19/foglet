@@ -2,7 +2,7 @@
 
 set -e
 
-echo "Installing wtx..."
+echo "Installing wtx + fog + fogd..."
 
 # Colors
 RED='\033[0;31m'
@@ -17,14 +17,18 @@ if ! command -v go &> /dev/null; then
     exit 1
 fi
 
-# Install wtx
-echo -e "${YELLOW}Installing wtx binary...${NC}"
+# Install binaries
+echo -e "${YELLOW}Installing binaries...${NC}"
 go install github.com/darkLord19/wtx/cmd/wtx@latest
+go install github.com/darkLord19/wtx/cmd/fog@latest
+go install github.com/darkLord19/wtx/cmd/fogd@latest
 
 # Check if installation was successful
-if command -v wtx &> /dev/null; then
-    echo -e "${GREEN}✓ wtx installed successfully${NC}"
-    wtx version
+if command -v wtx &> /dev/null && command -v fog &> /dev/null && command -v fogd &> /dev/null; then
+    echo -e "${GREEN}✓ wtx/fog/fogd installed successfully${NC}"
+    wtx version || true
+    fog version || true
+    fogd version || true
 else
     echo -e "${RED}Error: Installation failed${NC}"
     echo "Make sure \$GOPATH/bin is in your PATH"
@@ -71,5 +75,8 @@ echo "  wtx              # Launch interactive UI"
 echo "  wtx list         # List worktrees"
 echo "  wtx add <n>     # Create worktree"
 echo "  wtx open <n>    # Open in editor"
+echo "  fog setup        # Configure PAT + default tool"
+echo "  fog ui           # Open Fog web UI (auto-starts fogd)"
+echo "  fog run --help   # Run AI task in isolated worktree"
 echo ""
-echo "For more info: wtx --help"
+echo "For more info: wtx --help, fog --help, fogd --help"
