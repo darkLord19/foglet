@@ -22,6 +22,7 @@ Pure Git worktree management with zero AI, zero networking.
 wtx                    # Interactive TUI
 wtx list              # List worktrees
 wtx add <n>          # Create worktree
+wtx add --json <n>   # Create worktree with JSON output (for automation)
 wtx open <n>         # Open in editor
 wtx rm <n>           # Remove worktree
 wtx status <n>       # Detailed status

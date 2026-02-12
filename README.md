@@ -24,6 +24,7 @@ Git worktree manager (zero AI, zero networking)
 wtx                    # Interactive TUI
 wtx list              # List worktrees
 wtx add <n>          # Create worktree  
+wtx add --json <n>   # Create worktree (machine-readable output)
 wtx open <n>         # Open in editor
 wtx status <n>       # Detailed status
 wtx config           # View configuration

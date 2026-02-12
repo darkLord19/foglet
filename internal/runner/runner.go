@@ -1,10 +1,9 @@
 package runner
 
 import (
+	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/darkLord19/wtx/internal/ai"
@@ -104,8 +103,8 @@ func (r *Runner) createWorktree(t *task.Task) error {
 	t.TransitionTo(task.StateSetup)
 	r.taskStore.Save(t)
 
-	// Use wtx to create worktree
-	cmd := exec.Command("wtx", "add", t.Branch)
+	// Use wtx to create worktree and return machine-readable path.
+	cmd := exec.Command("wtx", "add", "--json", t.Branch)
 	cmd.Dir = r.repoPath
 
 	output, err := cmd.CombinedOutput()
@@ -113,10 +112,11 @@ func (r *Runner) createWorktree(t *task.Task) error {
 		return fmt.Errorf("create worktree: %w\n%s", err, output)
 	}
 
-	// Extract worktree path from wtx output or construct it
-	// For now, construct it based on wtx conventions
-	worktreePath := filepath.Join(r.repoPath, "..", "worktrees", t.Branch)
-	t.WorktreePath = worktreePath
+	result, err := parseWtxAddOutput(output)
+	if err != nil {
+		return err
+	}
+	t.WorktreePath = result.Path
 
 	return nil
 }
@@ -271,12 +271,28 @@ func (r *Runner) ListActiveTasks() ([]*task.Task, error) {
 }
 
 func isGitRepo(path string) bool {
-	gitDir := filepath.Join(path, ".git")
-	info, err := os.Stat(gitDir)
-	return err == nil && info.IsDir()
+	cmd := exec.Command("git", "-C", path, "rev-parse", "--git-dir")
+	return cmd.Run() == nil
 }
 
 func commandExists(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil
+}
+
+type wtxAddOutput struct {
+	Name   string `json:"name"`
+	Branch string `json:"branch"`
+	Path   string `json:"path"`
+}
+
+func parseWtxAddOutput(raw []byte) (*wtxAddOutput, error) {
+	var out wtxAddOutput
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("parse wtx add output: %w", err)
+	}
+	if strings.TrimSpace(out.Path) == "" {
+		return nil, fmt.Errorf("parse wtx add output: missing path")
+	}
+	return &out, nil
 }

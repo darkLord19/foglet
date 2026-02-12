@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Onboarding command** - `fog setup` to configure PAT and default tool
 - **Repo commands** - `fog repos discover|import|list`
 - **Managed repo initialization** - `fog repos import` creates bare clone + base worktree under `~/.fog/repos`
+- **Runner worktree path resolution** - Fog now reads `wtx add --json` output instead of hardcoded paths
 
 ### Added - wtx Enhancements
 - `wtx status <n>` - Detailed worktree status
@@ -35,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Command execution utility
 - Metadata storage now resolves Git common dir for worktree compatibility
 - `wtx add` now creates the target branch when it does not already exist
+- `wtx add --json` now emits machine-readable metadata for automation callers
 
 ### Added - Documentation
 - Complete Fog guide (docs/FOG.md)

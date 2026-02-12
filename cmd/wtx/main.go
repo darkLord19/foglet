@@ -18,8 +18,9 @@ import (
 var version = "dev"
 
 var (
-	flagJSON   bool
-	flagEditor string
+	flagJSON    bool
+	flagAddJSON bool
+	flagEditor  string
 )
 
 func main() {
@@ -70,6 +71,7 @@ var versionCmd = &cobra.Command{
 
 func init() {
 	listCmd.Flags().BoolVar(&flagJSON, "json", false, "Output as JSON")
+	addCmd.Flags().BoolVar(&flagAddJSON, "json", false, "Output result as JSON")
 
 	rootCmd.PersistentFlags().StringVar(&flagEditor, "editor", "", "Editor to use (vscode, cursor, neovim, etc)")
 
@@ -219,7 +221,9 @@ func runAdd(name, branch string) error {
 	wtPath := fmt.Sprintf("%s/%s/%s", root, cfg.WorktreeDir, name)
 
 	// Create worktree
-	fmt.Printf("Creating worktree '%s' at %s...\n", name, wtPath)
+	if !flagAddJSON {
+		fmt.Printf("Creating worktree '%s' at %s...\n", name, wtPath)
+	}
 	if g.BranchExists(branch) {
 		if err := g.AddWorktree(wtPath, branch); err != nil {
 			return fmt.Errorf("create worktree: %w", err)
@@ -249,11 +253,15 @@ func runAdd(name, branch string) error {
 		return err
 	}
 
-	fmt.Printf("✓ Worktree '%s' created\n", name)
+	if !flagAddJSON {
+		fmt.Printf("✓ Worktree '%s' created\n", name)
+	}
 
 	// Run setup command if configured
 	if cfg.SetupCmd != "" {
-		fmt.Printf("Running setup command: %s\n", cfg.SetupCmd)
+		if !flagAddJSON {
+			fmt.Printf("Running setup command: %s\n", cfg.SetupCmd)
+		}
 		result := util.RunCommand(cfg.SetupCmd, wtPath)
 
 		// Update metadata with setup results
@@ -261,14 +269,32 @@ func runAdd(name, branch string) error {
 		wtMeta.SetupOutput = result.Output
 
 		if result.Error != nil {
-			fmt.Printf("⚠ Setup command failed (exit %d)\n", result.ExitCode)
-			fmt.Printf("Output:\n%s\n", result.Output)
+			if !flagAddJSON {
+				fmt.Printf("⚠ Setup command failed (exit %d)\n", result.ExitCode)
+				fmt.Printf("Output:\n%s\n", result.Output)
+			}
 			store.SetWorktree(name, wtMeta)
 			return fmt.Errorf("setup command failed: %w", result.Error)
 		}
 
 		store.SetWorktree(name, wtMeta)
-		fmt.Printf("✓ Setup complete (%v)\n", result.Duration)
+		if !flagAddJSON {
+			fmt.Printf("✓ Setup complete (%v)\n", result.Duration)
+		}
+	}
+
+	if flagAddJSON {
+		result := map[string]interface{}{
+			"name":   name,
+			"branch": branch,
+			"path":   wtPath,
+		}
+		data, err := json.Marshal(result)
+		if err != nil {
+			return fmt.Errorf("marshal add result: %w", err)
+		}
+		fmt.Println(string(data))
+		return nil
 	}
 
 	// Auto-open if configured
