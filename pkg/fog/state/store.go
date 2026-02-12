@@ -12,15 +12,30 @@ import (
 )
 
 const (
-	defaultDBName  = "fog.db"
-	defaultKeyName = "master.key"
-	githubPATKey   = "github_pat"
+	defaultDBName      = "fog.db"
+	defaultKeyName     = "master.key"
+	githubPATKey       = "github_pat"
+	settingDefaultTool = "default_tool"
 )
 
 // Store is the Fog state persistence layer backed by SQLite.
 type Store struct {
 	db  *sql.DB
 	key []byte
+}
+
+// Repo holds Fog's managed repository metadata.
+type Repo struct {
+	ID               int64
+	Name             string
+	URL              string
+	Host             string
+	Owner            string
+	Repo             string
+	BarePath         string
+	BaseWorktreePath string
+	DefaultBranch    string
+	CreatedAt        time.Time
 }
 
 // NewStore opens or creates the Fog SQLite database in fogHome.
@@ -138,10 +153,10 @@ func (s *Store) Close() error {
 func (s *Store) SetSetting(key, value string) error {
 	_, err := s.db.Exec(
 		`INSERT INTO settings(key, value, updated_at) VALUES(?, ?, ?)
-		 ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`,
+	 ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`,
 		key,
 		value,
-		time.Now().UTC().Format(time.RFC3339Nano),
+		nowRFC3339Nano(),
 	)
 	if err != nil {
 		return fmt.Errorf("set setting %q: %w", key, err)
@@ -174,10 +189,10 @@ func (s *Store) SaveGitHubToken(token string) error {
 
 	_, err = s.db.Exec(
 		`INSERT INTO secrets(key, ciphertext, updated_at) VALUES(?, ?, ?)
-		 ON CONFLICT(key) DO UPDATE SET ciphertext=excluded.ciphertext, updated_at=excluded.updated_at`,
+	 ON CONFLICT(key) DO UPDATE SET ciphertext=excluded.ciphertext, updated_at=excluded.updated_at`,
 		githubPATKey,
 		ciphertext,
-		time.Now().UTC().Format(time.RFC3339Nano),
+		nowRFC3339Nano(),
 	)
 	if err != nil {
 		return fmt.Errorf("save github token: %w", err)
@@ -212,4 +227,113 @@ func (s *Store) HasGitHubToken() (bool, error) {
 		return false, fmt.Errorf("check github token: %w", err)
 	}
 	return count > 0, nil
+}
+
+// SetDefaultTool stores the default AI tool used when task input omits "tool".
+func (s *Store) SetDefaultTool(tool string) error {
+	if tool == "" {
+		return errors.New("default tool cannot be empty")
+	}
+	return s.SetSetting(settingDefaultTool, tool)
+}
+
+// GetDefaultTool returns the configured default AI tool.
+func (s *Store) GetDefaultTool() (tool string, found bool, err error) {
+	return s.GetSetting(settingDefaultTool)
+}
+
+// UpsertRepo inserts or updates a managed repository by name.
+func (s *Store) UpsertRepo(repo Repo) (int64, error) {
+	if repo.Name == "" {
+		return 0, errors.New("repo name cannot be empty")
+	}
+	if repo.URL == "" {
+		return 0, errors.New("repo url cannot be empty")
+	}
+	if repo.Host == "" {
+		return 0, errors.New("repo host cannot be empty")
+	}
+	if repo.BarePath == "" {
+		return 0, errors.New("repo bare path cannot be empty")
+	}
+	if repo.BaseWorktreePath == "" {
+		return 0, errors.New("repo base worktree path cannot be empty")
+	}
+
+	now := nowRFC3339Nano()
+	_, err := s.db.Exec(
+		`INSERT INTO repos(name, url, host, owner, repo, bare_path, base_worktree_path, default_branch, created_at)
+		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(name) DO UPDATE SET
+		   url=excluded.url,
+		   host=excluded.host,
+		   owner=excluded.owner,
+		   repo=excluded.repo,
+		   bare_path=excluded.bare_path,
+		   base_worktree_path=excluded.base_worktree_path,
+		   default_branch=excluded.default_branch`,
+		repo.Name,
+		repo.URL,
+		repo.Host,
+		repo.Owner,
+		repo.Repo,
+		repo.BarePath,
+		repo.BaseWorktreePath,
+		repo.DefaultBranch,
+		now,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("upsert repo %q: %w", repo.Name, err)
+	}
+
+	var id int64
+	if err := s.db.QueryRow(`SELECT id FROM repos WHERE name = ?`, repo.Name).Scan(&id); err != nil {
+		return 0, fmt.Errorf("lookup repo %q: %w", repo.Name, err)
+	}
+	return id, nil
+}
+
+// ListRepos returns all managed repositories ordered by name.
+func (s *Store) ListRepos() ([]Repo, error) {
+	rows, err := s.db.Query(
+		`SELECT id, name, url, host, owner, repo, bare_path, base_worktree_path, default_branch, created_at
+		   FROM repos
+		  ORDER BY name ASC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list repos: %w", err)
+	}
+	defer rows.Close()
+
+	repos := make([]Repo, 0)
+	for rows.Next() {
+		var repo Repo
+		var createdAt string
+		if err := rows.Scan(
+			&repo.ID,
+			&repo.Name,
+			&repo.URL,
+			&repo.Host,
+			&repo.Owner,
+			&repo.Repo,
+			&repo.BarePath,
+			&repo.BaseWorktreePath,
+			&repo.DefaultBranch,
+			&createdAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan repo: %w", err)
+		}
+		if ts, err := time.Parse(time.RFC3339Nano, createdAt); err == nil {
+			repo.CreatedAt = ts
+		}
+		repos = append(repos, repo)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate repos: %w", err)
+	}
+	return repos, nil
+}
+
+func nowRFC3339Nano() string {
+	return time.Now().UTC().Format(time.RFC3339Nano)
 }

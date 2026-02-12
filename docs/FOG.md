@@ -309,10 +309,17 @@ curl http://localhost:8080/api/tasks/<task-id>
 - SQLite database: `~/.fog/fog.db`
 - Master encryption key (local file): `~/.fog/master.key`
 - GitHub PAT: encrypted at rest in SQLite (AES-GCM)
+- Managed repo registry: stored in SQLite (`repos` table)
 
 Notes:
 - PAT is persisted as encrypted ciphertext only (no raw token on disk).
 - The local master key is file-based (no OS keychain dependency).
+
+### Onboarding (v1)
+
+- Required: GitHub PAT
+- Required: default AI tool selection
+- After PAT is saved, Fog can list accessible GitHub repos for users to select/import
 
 ## Safety Rules
 

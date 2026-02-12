@@ -151,6 +151,7 @@ Duration: 2m 30s
 - State DB: `~/.fog/fog.db`
 - Local encryption key: `~/.fog/master.key`
 - GitHub PAT (if configured): encrypted at rest in SQLite
+- Managed repository registry: stored in SQLite and used by fogd for multi-repo tasks
 
 ## 🎯 Use Cases
 
