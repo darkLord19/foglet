@@ -13,7 +13,7 @@ Manage Git worktrees directly from VS Code.
 ## Requirements
 
 - `wtx` CLI must be installed and in PATH
-- Install: `go install github.com/darkLord19/wtx/cmd/wtx@latest`
+- Install: `go install github.com/darkLord19/foglet/cmd/wtx@latest`
 
 ## Usage
 

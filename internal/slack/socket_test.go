@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/darkLord19/wtx/internal/task"
+	"github.com/darkLord19/foglet/internal/task"
 )
 
 func TestStripMentions(t *testing.T) {

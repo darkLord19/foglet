@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/darkLord19/wtx/internal/state"
+	"github.com/darkLord19/foglet/internal/state"
 )
 
 func TestHandleSessionsGet(t *testing.T) {

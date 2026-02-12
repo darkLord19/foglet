@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/darkLord19/wtx/internal/state"
+	"github.com/darkLord19/foglet/internal/state"
 )
 
 func TestStartSessionRequiresStateStore(t *testing.T) {

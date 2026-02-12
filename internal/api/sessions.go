@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/darkLord19/wtx/internal/runner"
-	"github.com/darkLord19/wtx/internal/state"
-	"github.com/darkLord19/wtx/internal/toolcfg"
+	"github.com/darkLord19/foglet/internal/runner"
+	"github.com/darkLord19/foglet/internal/state"
+	"github.com/darkLord19/foglet/internal/toolcfg"
 )
 
 var nonBranchSlugChar = regexp.MustCompile(`[^a-z0-9]+`)

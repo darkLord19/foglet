@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/darkLord19/wtx/internal/cloud"
-	"github.com/darkLord19/wtx/internal/env"
+	"github.com/darkLord19/foglet/internal/cloud"
+	"github.com/darkLord19/foglet/internal/env"
 	"github.com/spf13/cobra"
 )
 

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/darkLord19/wtx/internal/cloud"
+	"github.com/darkLord19/foglet/internal/cloud"
 )
 
 type ClientConfig struct {

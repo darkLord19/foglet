@@ -1,4 +1,4 @@
-module github.com/darkLord19/wtx
+module github.com/darkLord19/foglet
 
 go 1.24.0
 

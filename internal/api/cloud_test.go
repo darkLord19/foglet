@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/darkLord19/wtx/internal/cloudcfg"
+	"github.com/darkLord19/foglet/internal/cloudcfg"
 )
 
 func TestHandleCloudConfigAndStatus(t *testing.T) {

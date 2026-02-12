@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/darkLord19/wtx/internal/cloud"
-	"github.com/darkLord19/wtx/internal/state"
+	"github.com/darkLord19/foglet/internal/cloud"
+	"github.com/darkLord19/foglet/internal/state"
 )
 
 func TestResolveBranchNameFromPromptAndPrefix(t *testing.T) {

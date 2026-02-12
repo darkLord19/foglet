@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/darkLord19/wtx/internal/cloudcfg"
-	"github.com/darkLord19/wtx/internal/cloudrelay"
+	"github.com/darkLord19/foglet/internal/cloudcfg"
+	"github.com/darkLord19/foglet/internal/cloudrelay"
 	"github.com/google/uuid"
 )
 

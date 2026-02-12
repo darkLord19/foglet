@@ -6,10 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/darkLord19/wtx/internal/ai"
-	wtxconfig "github.com/darkLord19/wtx/internal/config"
-	fogenv "github.com/darkLord19/wtx/internal/env"
-	"github.com/darkLord19/wtx/internal/state"
+	"github.com/darkLord19/foglet/internal/ai"
+	wtxconfig "github.com/darkLord19/foglet/internal/config"
+	fogenv "github.com/darkLord19/foglet/internal/env"
+	"github.com/darkLord19/foglet/internal/state"
 	"github.com/spf13/cobra"
 )
 

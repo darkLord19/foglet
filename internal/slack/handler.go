@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/darkLord19/wtx/internal/runner"
-	"github.com/darkLord19/wtx/internal/state"
-	"github.com/darkLord19/wtx/internal/task"
-	"github.com/darkLord19/wtx/internal/toolcfg"
+	"github.com/darkLord19/foglet/internal/runner"
+	"github.com/darkLord19/foglet/internal/state"
+	"github.com/darkLord19/foglet/internal/task"
+	"github.com/darkLord19/foglet/internal/toolcfg"
 	"github.com/google/uuid"
 )
 

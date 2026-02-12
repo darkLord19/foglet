@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	foggithub "github.com/darkLord19/wtx/internal/github"
+	foggithub "github.com/darkLord19/foglet/internal/github"
 )
 
 func TestParseIndex(t *testing.T) {

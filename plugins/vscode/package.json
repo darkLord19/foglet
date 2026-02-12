@@ -6,7 +6,7 @@
   "publisher": "darkLord19",
   "repository": {
     "type": "git",
-    "url": "https://github.com/darkLord19/wtx"
+    "url": "https://github.com/darkLord19/foglet"
   },
   "engines": {
     "vscode": "^1.80.0"

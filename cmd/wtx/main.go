@@ -6,12 +6,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/darkLord19/wtx/internal/config"
-	"github.com/darkLord19/wtx/internal/editor"
-	"github.com/darkLord19/wtx/internal/git"
-	"github.com/darkLord19/wtx/internal/metadata"
-	"github.com/darkLord19/wtx/internal/tui"
-	"github.com/darkLord19/wtx/internal/util"
+	"github.com/darkLord19/foglet/internal/config"
+	"github.com/darkLord19/foglet/internal/editor"
+	"github.com/darkLord19/foglet/internal/git"
+	"github.com/darkLord19/foglet/internal/metadata"
+	"github.com/darkLord19/foglet/internal/tui"
+	"github.com/darkLord19/foglet/internal/util"
 	"github.com/spf13/cobra"
 )
 

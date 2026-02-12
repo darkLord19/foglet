@@ -9,8 +9,8 @@ import (
 	"io/fs"
 	"time"
 
-	"github.com/darkLord19/wtx/internal/daemon"
-	"github.com/darkLord19/wtx/internal/env"
+	"github.com/darkLord19/foglet/internal/daemon"
+	"github.com/darkLord19/foglet/internal/env"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"

@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	fogenv "github.com/darkLord19/wtx/internal/env"
-	foggithub "github.com/darkLord19/wtx/internal/github"
-	"github.com/darkLord19/wtx/internal/state"
+	fogenv "github.com/darkLord19/foglet/internal/env"
+	foggithub "github.com/darkLord19/foglet/internal/github"
+	"github.com/darkLord19/foglet/internal/state"
 	"github.com/spf13/cobra"
 )
 

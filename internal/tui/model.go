@@ -6,10 +6,10 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/darkLord19/wtx/internal/config"
-	"github.com/darkLord19/wtx/internal/editor"
-	"github.com/darkLord19/wtx/internal/git"
-	"github.com/darkLord19/wtx/internal/metadata"
+	"github.com/darkLord19/foglet/internal/config"
+	"github.com/darkLord19/foglet/internal/editor"
+	"github.com/darkLord19/foglet/internal/git"
+	"github.com/darkLord19/foglet/internal/metadata"
 )
 
 // Model represents the TUI state

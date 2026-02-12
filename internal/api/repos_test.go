@@ -8,8 +8,8 @@ import (
 	"reflect"
 	"testing"
 
-	foggithub "github.com/darkLord19/wtx/internal/github"
-	"github.com/darkLord19/wtx/internal/state"
+	foggithub "github.com/darkLord19/foglet/internal/github"
+	"github.com/darkLord19/foglet/internal/state"
 )
 
 func TestHandleReposList(t *testing.T) {

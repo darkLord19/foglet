@@ -11,13 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/darkLord19/wtx/internal/api"
-	"github.com/darkLord19/wtx/internal/cloudcfg"
-	"github.com/darkLord19/wtx/internal/cloudrelay"
-	"github.com/darkLord19/wtx/internal/env"
-	"github.com/darkLord19/wtx/internal/runner"
-	"github.com/darkLord19/wtx/internal/slack"
-	"github.com/darkLord19/wtx/internal/state"
+	"github.com/darkLord19/foglet/internal/api"
+	"github.com/darkLord19/foglet/internal/cloudcfg"
+	"github.com/darkLord19/foglet/internal/cloudrelay"
+	"github.com/darkLord19/foglet/internal/env"
+	"github.com/darkLord19/foglet/internal/runner"
+	"github.com/darkLord19/foglet/internal/slack"
+	"github.com/darkLord19/foglet/internal/state"
 	"github.com/spf13/cobra"
 )
 

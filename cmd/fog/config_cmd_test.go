@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
-	fogenv "github.com/darkLord19/wtx/internal/env"
-	"github.com/darkLord19/wtx/internal/state"
+	fogenv "github.com/darkLord19/foglet/internal/env"
+	"github.com/darkLord19/foglet/internal/state"
 )
 
 func TestValidateBranchPrefix(t *testing.T) {
