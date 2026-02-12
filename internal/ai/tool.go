@@ -40,7 +40,7 @@ func DetectTool(preferred string) (Tool, error) {
 		&ClaudeCode{},
 		&Aider{},
 	}
-	
+
 	// Try preferred first
 	if preferred != "" {
 		tool, err := GetTool(preferred)
@@ -48,14 +48,14 @@ func DetectTool(preferred string) (Tool, error) {
 			return tool, nil
 		}
 	}
-	
+
 	// Fall back to first available
 	for _, tool := range tools {
 		if tool.IsAvailable() {
 			return tool, nil
 		}
 	}
-	
+
 	return nil, fmt.Errorf("no AI tool available")
 }
 

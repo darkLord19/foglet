@@ -22,7 +22,7 @@ func Detect(preferred string) (Editor, error) {
 		&ClaudeCode{},
 		&Vim{},
 	}
-	
+
 	// If preferred editor is specified, try it first
 	if preferred != "" {
 		for _, ed := range editors {
@@ -31,7 +31,7 @@ func Detect(preferred string) (Editor, error) {
 			}
 		}
 	}
-	
+
 	// Try $EDITOR environment variable
 	if editorEnv := os.Getenv("EDITOR"); editorEnv != "" {
 		for _, ed := range editors {
@@ -40,14 +40,14 @@ func Detect(preferred string) (Editor, error) {
 			}
 		}
 	}
-	
+
 	// Fall back to first available editor
 	for _, ed := range editors {
 		if ed.IsAvailable() {
 			return ed, nil
 		}
 	}
-	
+
 	return nil, fmt.Errorf("no editor found")
 }
 

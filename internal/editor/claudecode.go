@@ -22,11 +22,11 @@ func (c *ClaudeCode) Open(path string, reuse bool) error {
 	if !commandExists("claude") {
 		cmdName = "claude-code"
 	}
-	
+
 	args := []string{path}
 	// Claude Code may support reuse window in the future
 	// For now, just open the path
-	
+
 	cmd := exec.Command(cmdName, args...)
 	return cmd.Start()
 }

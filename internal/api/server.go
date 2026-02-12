@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/darkLord19/wtx/internal/runner"
+	"github.com/darkLord19/wtx/internal/task"
 	"github.com/google/uuid"
-	"github.com/darkLord19/wtx/pkg/fog/runner"
-	"github.com/darkLord19/wtx/pkg/fog/task"
 )
 
 // Server provides HTTP API for Fog
@@ -37,10 +37,10 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
 	s.RegisterRoutes(mux)
-	
+
 	addr := fmt.Sprintf(":%d", s.port)
 	fmt.Printf("Starting Fog API server on %s\n", addr)
-	
+
 	return http.ListenAndServe(addr, s.corsMiddleware(mux))
 }
 
@@ -50,23 +50,23 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	tasks, err := s.runner.ListTasks()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tasks)
 }
 
 // CreateTaskRequest represents a task creation request
 type CreateTaskRequest struct {
-	Branch      string       `json:"branch"`
-	Prompt      string       `json:"prompt"`
-	AITool      string       `json:"ai_tool"`
-	Options     task.Options `json:"options"`
+	Branch  string       `json:"branch"`
+	Prompt  string       `json:"prompt"`
+	AITool  string       `json:"ai_tool"`
+	Options task.Options `json:"options"`
 }
 
 // handleCreateTask creates a new task
@@ -75,23 +75,23 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	var req CreateTaskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	
+
 	// Validate request
 	if req.Branch == "" || req.Prompt == "" {
 		http.Error(w, "branch and prompt are required", http.StatusBadRequest)
 		return
 	}
-	
+
 	if req.AITool == "" {
 		req.AITool = "claude"
 	}
-	
+
 	// Create task
 	t := &task.Task{
 		ID:        uuid.New().String(),
@@ -103,11 +103,11 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-	
+
 	// Execute asynchronously if requested
 	if req.Options.Async {
 		go s.runner.Execute(t)
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -116,13 +116,13 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	
+
 	// Execute synchronously
 	if err := s.runner.Execute(t); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(t)
 }
@@ -133,20 +133,20 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	// Extract task ID from path
 	taskID := r.URL.Path[len("/api/tasks/"):]
 	if taskID == "" {
 		http.Error(w, "task ID required", http.StatusBadRequest)
 		return
 	}
-	
+
 	t, err := s.runner.GetTask(taskID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(t)
 }
@@ -166,12 +166,12 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		
+
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-		
+
 		next.ServeHTTP(w, r)
 	})
 }

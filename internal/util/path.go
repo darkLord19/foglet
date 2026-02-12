@@ -12,7 +12,7 @@ func ExpandPath(path string) (string, error) {
 	if path == "" {
 		return "", nil
 	}
-	
+
 	// Expand ~
 	if strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()
@@ -21,13 +21,13 @@ func ExpandPath(path string) (string, error) {
 		}
 		path = filepath.Join(home, path[2:])
 	}
-	
+
 	// Get absolute path
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return "", fmt.Errorf("get absolute path: %w", err)
 	}
-	
+
 	return absPath, nil
 }
 
@@ -55,11 +55,11 @@ func WorktreeNameFromPath(path string) string {
 func SanitizePath(base, user string) (string, error) {
 	cleaned := filepath.Clean(user)
 	full := filepath.Join(base, cleaned)
-	
+
 	// Ensure the full path is still under base
 	if !strings.HasPrefix(full, base) {
 		return "", fmt.Errorf("invalid path: %s", user)
 	}
-	
+
 	return full, nil
 }

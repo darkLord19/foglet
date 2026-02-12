@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/darkLord19/wtx/internal/runner"
+	"github.com/darkLord19/wtx/internal/task"
 	"github.com/google/uuid"
-	"github.com/darkLord19/wtx/pkg/fog/runner"
-	"github.com/darkLord19/wtx/pkg/fog/task"
 )
 
 // Handler handles Slack slash commands and interactions
 type Handler struct {
-	runner     *runner.Runner
+	runner        *runner.Runner
 	signingSecret string
 }
 
@@ -47,13 +47,13 @@ func (h *Handler) HandleCommand(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	
+
 	// Parse form data
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	
+
 	cmd := SlackCommand{
 		Token:       r.FormValue("token"),
 		TeamID:      r.FormValue("team_id"),
@@ -66,21 +66,21 @@ func (h *Handler) HandleCommand(w http.ResponseWriter, r *http.Request) {
 		Text:        r.FormValue("text"),
 		ResponseURL: r.FormValue("response_url"),
 	}
-	
+
 	// Parse command text
 	t, err := h.parseCommand(cmd.Text)
 	if err != nil {
 		h.sendErrorResponse(w, err.Error())
 		return
 	}
-	
+
 	// Set Slack context
 	t.Options.SlackChannel = cmd.ChannelID
 	t.Options.Async = true // Slack commands are always async
-	
+
 	// Send immediate acknowledgment
 	h.sendAckResponse(w, t)
-	
+
 	// Execute task asynchronously
 	go func() {
 		if err := h.runner.Execute(t); err != nil {
@@ -95,18 +95,18 @@ func (h *Handler) HandleCommand(w http.ResponseWriter, r *http.Request) {
 // Example: "create branch feature-otp and add otp login using redis"
 func (h *Handler) parseCommand(text string) (*task.Task, error) {
 	text = strings.TrimSpace(text)
-	
+
 	// Match pattern: "create branch <n> and <prompt>"
 	re := regexp.MustCompile(`(?i)create\s+branch\s+(\S+)\s+and\s+(.+)`)
 	matches := re.FindStringSubmatch(text)
-	
+
 	if len(matches) != 3 {
 		return nil, fmt.Errorf("invalid command format. Use: create branch <n> and <prompt>")
 	}
-	
+
 	branch := matches[1]
 	prompt := matches[2]
-	
+
 	t := &task.Task{
 		ID:        uuid.New().String(),
 		State:     task.StateCreated,
@@ -122,7 +122,7 @@ func (h *Handler) parseCommand(text string) (*task.Task, error) {
 			BaseBranch: "main",
 		},
 	}
-	
+
 	return t, nil
 }
 
@@ -138,7 +138,7 @@ func (h *Handler) sendAckResponse(w http.ResponseWriter, t *task.Task) {
 			},
 		},
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
@@ -149,7 +149,7 @@ func (h *Handler) sendErrorResponse(w http.ResponseWriter, errorMsg string) {
 		"response_type": "ephemeral",
 		"text":          "❌ Error: " + errorMsg,
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
@@ -157,7 +157,7 @@ func (h *Handler) sendErrorResponse(w http.ResponseWriter, errorMsg string) {
 // sendCompletionNotification sends completion notification to Slack
 func (h *Handler) sendCompletionNotification(responseURL string, t *task.Task, err error) {
 	var message map[string]interface{}
-	
+
 	if err != nil {
 		message = map[string]interface{}{
 			"response_type": "in_channel",
@@ -172,7 +172,7 @@ func (h *Handler) sendCompletionNotification(responseURL string, t *task.Task, e
 	} else {
 		// Success message
 		duration := t.Duration()
-		
+
 		attachment := map[string]interface{}{
 			"color": "good",
 			"fields": []map[string]interface{}{
@@ -188,7 +188,7 @@ func (h *Handler) sendCompletionNotification(responseURL string, t *task.Task, e
 				},
 			},
 		}
-		
+
 		// Add PR URL if available
 		if prURL, ok := t.Metadata["pr_url"].(string); ok {
 			attachment["fields"] = append(attachment["fields"].([]map[string]interface{}), map[string]interface{}{
@@ -197,7 +197,7 @@ func (h *Handler) sendCompletionNotification(responseURL string, t *task.Task, e
 				"short": false,
 			})
 		}
-		
+
 		// Add action buttons
 		actions := []map[string]interface{}{
 			{
@@ -207,7 +207,7 @@ func (h *Handler) sendCompletionNotification(responseURL string, t *task.Task, e
 				"style": "primary",
 			},
 		}
-		
+
 		if _, ok := t.Metadata["pr_url"]; !ok {
 			// Add Create PR button if PR not created yet
 			actions = append(actions, map[string]interface{}{
@@ -218,16 +218,16 @@ func (h *Handler) sendCompletionNotification(responseURL string, t *task.Task, e
 				"style": "default",
 			})
 		}
-		
+
 		attachment["actions"] = actions
-		
+
 		message = map[string]interface{}{
 			"response_type": "in_channel",
 			"text":          fmt.Sprintf("✅ Task completed: %s", t.Branch),
 			"attachments":   []map[string]interface{}{attachment},
 		}
 	}
-	
+
 	// Send to response URL
 	payload, _ := json.Marshal(message)
 	http.Post(responseURL, "application/json", strings.NewReader(string(payload)))

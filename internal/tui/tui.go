@@ -12,12 +12,12 @@ func Run(repoPath string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	p := tea.NewProgram(m, tea.WithAltScreen())
-	
+
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("tui error: %w", err)
 	}
-	
+
 	return nil
 }

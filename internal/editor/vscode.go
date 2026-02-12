@@ -20,7 +20,7 @@ func (v *VSCode) Open(path string, reuse bool) error {
 	if reuse {
 		args = append([]string{"-r"}, args...)
 	}
-	
+
 	cmd := exec.Command("code", args...)
 	return cmd.Start()
 }

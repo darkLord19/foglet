@@ -22,18 +22,18 @@ const (
 
 // Task represents an AI coding task
 type Task struct {
-	ID          string                 `json:"id"`
-	State       State                  `json:"state"`
-	Branch      string                 `json:"branch"`
-	Prompt      string                 `json:"prompt"`
-	AITool      string                 `json:"ai_tool"`
-	WorktreePath string                `json:"worktree_path"`
-	Options     Options                `json:"options"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
-	CompletedAt *time.Time             `json:"completed_at,omitempty"`
-	Error       string                 `json:"error,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	ID           string                 `json:"id"`
+	State        State                  `json:"state"`
+	Branch       string                 `json:"branch"`
+	Prompt       string                 `json:"prompt"`
+	AITool       string                 `json:"ai_tool"`
+	WorktreePath string                 `json:"worktree_path"`
+	Options      Options                `json:"options"`
+	CreatedAt    time.Time              `json:"created_at"`
+	UpdatedAt    time.Time              `json:"updated_at"`
+	CompletedAt  *time.Time             `json:"completed_at,omitempty"`
+	Error        string                 `json:"error,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // Options contains task execution options
@@ -68,18 +68,18 @@ func (s State) CanTransitionTo(next State) bool {
 		StateCompleted:  {},
 		StateFailed:     {},
 	}
-	
+
 	allowed, ok := validTransitions[s]
 	if !ok {
 		return false
 	}
-	
+
 	for _, a := range allowed {
 		if a == next {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -88,15 +88,15 @@ func (t *Task) TransitionTo(newState State) error {
 	if !t.State.CanTransitionTo(newState) {
 		return fmt.Errorf("invalid transition from %s to %s", t.State, newState)
 	}
-	
+
 	t.State = newState
 	t.UpdatedAt = time.Now()
-	
+
 	if newState == StateCompleted || newState == StateFailed {
 		now := time.Now()
 		t.CompletedAt = &now
 	}
-	
+
 	return nil
 }
 

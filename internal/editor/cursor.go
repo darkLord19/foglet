@@ -20,7 +20,7 @@ func (c *Cursor) Open(path string, reuse bool) error {
 	if reuse {
 		args = append([]string{"-r"}, args...)
 	}
-	
+
 	cmd := exec.Command("cursor", args...)
 	return cmd.Start()
 }

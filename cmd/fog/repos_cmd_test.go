@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	foggithub "github.com/darkLord19/wtx/pkg/fog/github"
+	foggithub "github.com/darkLord19/wtx/internal/github"
 )
 
 func TestParseIndex(t *testing.T) {

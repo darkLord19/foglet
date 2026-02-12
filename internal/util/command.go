@@ -20,33 +20,33 @@ type CommandResult struct {
 func RunCommand(command, workdir string) *CommandResult {
 	start := time.Now()
 	result := &CommandResult{}
-	
+
 	// Parse command (simple split on spaces - not shell-safe but works for common cases)
 	parts := strings.Fields(command)
 	if len(parts) == 0 {
 		result.Error = fmt.Errorf("empty command")
 		return result
 	}
-	
+
 	// Create command
 	cmd := exec.Command(parts[0], parts[1:]...)
 	cmd.Dir = workdir
-	
+
 	// Capture output
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	
+
 	// Run
 	err := cmd.Run()
 	result.Duration = time.Since(start)
-	
+
 	// Combine stdout and stderr
 	result.Output = stdout.String()
 	if stderr.Len() > 0 {
 		result.Output += "\n" + stderr.String()
 	}
-	
+
 	if err != nil {
 		result.Error = err
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -57,7 +57,7 @@ func RunCommand(command, workdir string) *CommandResult {
 	} else {
 		result.ExitCode = 0
 	}
-	
+
 	return result
 }
 

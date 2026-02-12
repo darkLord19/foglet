@@ -24,6 +24,6 @@ func (n *Neovim) Open(path string, reuse bool) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Dir = path
-	
+
 	return cmd.Run()
 }

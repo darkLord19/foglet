@@ -198,7 +198,7 @@ curl -X POST http://localhost:8080/api/tasks/create \
 | Aider | ✅ | Yes | Full support |
 | Cursor | ⚠️ | Partial | Opens project only |
 
-Adding new tools: Implement `ai.Tool` interface in `pkg/fog/ai/`
+Adding new tools: Implement `ai.Tool` interface in `internal/ai/`
 
 ## 🌐 HTTP API
 

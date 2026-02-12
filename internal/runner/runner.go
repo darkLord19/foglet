@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/darkLord19/wtx/pkg/fog/ai"
-	"github.com/darkLord19/wtx/pkg/fog/task"
+	"github.com/darkLord19/wtx/internal/ai"
+	"github.com/darkLord19/wtx/internal/task"
 )
 
 // Runner orchestrates AI task execution

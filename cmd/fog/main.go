@@ -6,9 +6,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/darkLord19/wtx/pkg/fog/env"
-	"github.com/darkLord19/wtx/pkg/fog/runner"
-	"github.com/darkLord19/wtx/pkg/fog/task"
+	"github.com/darkLord19/wtx/internal/env"
+	"github.com/darkLord19/wtx/internal/runner"
+	"github.com/darkLord19/wtx/internal/task"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )

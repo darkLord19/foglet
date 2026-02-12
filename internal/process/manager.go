@@ -28,13 +28,13 @@ func (m *Manager) GetPortInfo(port int) (*PortInfo, error) {
 		// Port not in use
 		return nil, nil
 	}
-	
+
 	pidStr := strings.TrimSpace(string(output))
 	pid, err := strconv.Atoi(pidStr)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &PortInfo{
 		Port: port,
 		PID:  pid,
@@ -63,7 +63,7 @@ func (m *Manager) KillPort(port int) error {
 	if err != nil || info == nil {
 		return fmt.Errorf("port %d not in use", port)
 	}
-	
+
 	cmd := exec.Command("kill", strconv.Itoa(info.PID))
 	return cmd.Run()
 }
@@ -75,31 +75,31 @@ func (m *Manager) Start(workdir, command string) (*Process, error) {
 	if len(parts) == 0 {
 		return nil, fmt.Errorf("empty command")
 	}
-	
+
 	cmd := exec.Command(parts[0], parts[1:]...)
 	cmd.Dir = workdir
-	
+
 	// Setup stdout/stderr capture
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	
+
 	proc := &Process{
 		PID:     cmd.Process.Pid,
 		Command: command,
 		cmd:     cmd,
 	}
-	
+
 	// Start goroutines to read output
 	go func() {
 		scanner := bufio.NewScanner(stdout)
@@ -108,7 +108,7 @@ func (m *Manager) Start(workdir, command string) (*Process, error) {
 			fmt.Println(scanner.Text())
 		}
 	}()
-	
+
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
@@ -116,7 +116,7 @@ func (m *Manager) Start(workdir, command string) (*Process, error) {
 			fmt.Fprintln(os.Stderr, scanner.Text())
 		}
 	}()
-	
+
 	return proc, nil
 }
 

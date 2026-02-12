@@ -204,7 +204,7 @@ type Tool interface {
 }
 ```
 
-See `pkg/fog/ai/` for examples.
+See `internal/ai/` for examples.
 
 ## Slack Integration
 
@@ -504,18 +504,20 @@ make test
 │   ├── wtx/        # Worktree CLI
 │   ├── fog/        # AI orchestration CLI
 │   └── fogd/       # Daemon
-├── internal/       # wtx internals
+├── internal/
 │   ├── git/
 │   ├── tui/
 │   ├── editor/
 │   ├── metadata/
-│   └── config/
-├── pkg/fog/        # Fog shared packages
-│   ├── task/       # Task lifecycle
-│   ├── ai/         # AI tool adapters
-│   ├── runner/     # Orchestration engine
-│   ├── api/        # HTTP API
-│   └── slack/      # Slack integration
+│   ├── config/
+│   ├── task/       # Fog task lifecycle
+│   ├── ai/         # Fog AI tool adapters
+│   ├── runner/     # Fog orchestration engine
+│   ├── api/        # Fog HTTP API
+│   ├── slack/      # Fog Slack integration
+│   ├── state/      # Fog sqlite + encrypted secrets
+│   ├── github/     # GitHub API client
+│   └── env/        # Fog home/path helpers
 └── plugins/
     ├── vscode/     # VS Code extension
     └── claude-code/# Claude Code MCP

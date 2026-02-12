@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/darkLord19/wtx/pkg/fog/ai"
-	fogenv "github.com/darkLord19/wtx/pkg/fog/env"
-	foggithub "github.com/darkLord19/wtx/pkg/fog/github"
-	"github.com/darkLord19/wtx/pkg/fog/state"
+	"github.com/darkLord19/wtx/internal/ai"
+	fogenv "github.com/darkLord19/wtx/internal/env"
+	foggithub "github.com/darkLord19/wtx/internal/github"
+	"github.com/darkLord19/wtx/internal/state"
 	"github.com/spf13/cobra"
 )
 
