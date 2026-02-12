@@ -205,7 +205,7 @@ curl -X POST http://localhost:8080/api/tasks/create \
 |------|--------|-----|-------|
 | Claude Code | ✅ | Yes | Full support |
 | Aider | ✅ | Yes | Full support |
-| Cursor | ⚠️ | Partial | Opens project only |
+| Cursor | ✅ | Yes | Headless via `cursor-agent` |
 
 Adding new tools: Implement `ai.Tool` interface in `internal/ai/`
 

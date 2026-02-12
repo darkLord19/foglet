@@ -191,10 +191,10 @@ COMPLETED
    fog run --tool aider --prompt "..."
    ```
 
-3. **Cursor** - Opens project (no CLI yet)
+3. **Cursor** - Headless CLI support
    ```bash
    fog run --tool cursor --prompt "..."
-   # Opens in Cursor for manual work
+   # Uses cursor-agent headless mode
    ```
 
 ### Adding New Tools
