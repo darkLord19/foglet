@@ -389,6 +389,7 @@ Notes:
 
 - Required: GitHub PAT
 - Required: default AI tool selection
+- Supports both classic and fine-grained GitHub PATs
 - After PAT is saved, Fog can list accessible GitHub repos for users to select/import
 - Import initializes managed repo layout:
   - `~/.fog/repos/<alias>/repo.git` (bare clone)

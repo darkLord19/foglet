@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Built-in web UI** - Fogd now serves a lightweight dashboard at `/` for task activity and settings updates
 - **Settings API** - Added `GET/PUT /api/settings` for `default_tool` and `branch_prefix`
 - **Cursor headless adapter** - Cursor now runs via `cursor-agent` instead of opening GUI only
+- **Dual PAT clone auth** - Managed repo import now supports both Bearer and Basic auth strategies for PAT compatibility
 
 ### Added - wtx Enhancements
 - `wtx status <n>` - Detailed worktree status
@@ -58,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Safe worktree deletion with uncommitted changes check
 - GitHub PAT (if used) is stored encrypted at rest, never plaintext
 - Local-only task execution
+- Git clone error messages now redact authorization headers
 
 ## [0.1.0] - 2024-02-12
 

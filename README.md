@@ -71,6 +71,7 @@ go install github.com/darkLord19/wtx/cmd/{wtx,fog,fogd}@latest
 ```bash
 # 0. One-time onboarding (PAT + default tool)
 fog setup
+# Supports both classic and fine-grained GitHub PATs
 
 # 1. Simple AI task
 fog run \

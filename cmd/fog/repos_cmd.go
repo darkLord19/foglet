@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -239,8 +240,7 @@ func discoverGitHubRepos() ([]foggithub.Repo, error) {
 
 func ensureBareRepoInitialized(token string, repo foggithub.Repo, barePath, basePath string) error {
 	if _, err := os.Stat(barePath); errorsIsNotExist(err) {
-		header := "http.extraHeader=Authorization: Bearer " + token
-		if err := gitRunner(nil, "-c", header, "clone", "--bare", repo.CloneURL, barePath); err != nil {
+		if err := cloneBareRepoWithToken(token, repo.CloneURL, barePath); err != nil {
 			return fmt.Errorf("clone bare repository %s: %w", repo.FullName, err)
 		}
 	} else if err != nil {
@@ -261,14 +261,58 @@ func ensureBareRepoInitialized(token string, repo foggithub.Repo, barePath, base
 	return nil
 }
 
+func cloneBareRepoWithToken(token, cloneURL, barePath string) error {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return fmt.Errorf("token is required")
+	}
+
+	headers := []string{
+		"http.extraHeader=Authorization: Bearer " + token,
+		"http.extraHeader=Authorization: Basic " + basicAuthCredential(token),
+	}
+
+	var lastErr error
+	for _, header := range headers {
+		err := gitRunner(nil, "-c", header, "clone", "--bare", cloneURL, barePath)
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+	}
+
+	if lastErr != nil {
+		return lastErr
+	}
+	return fmt.Errorf("clone failed")
+}
+
+func basicAuthCredential(token string) string {
+	value := "x-access-token:" + strings.TrimSpace(token)
+	return base64.StdEncoding.EncodeToString([]byte(value))
+}
+
 func runGitCommand(extraEnv []string, args ...string) error {
 	cmd := exec.Command("git", args...)
 	cmd.Env = append(os.Environ(), extraEnv...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("git %s: %w\n%s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("git %s: %w\n%s", strings.Join(sanitizeGitArgs(args), " "), err, strings.TrimSpace(string(output)))
 	}
 	return nil
+}
+
+func sanitizeGitArgs(args []string) []string {
+	sanitized := make([]string, len(args))
+	copy(sanitized, args)
+
+	for i, arg := range sanitized {
+		if strings.HasPrefix(arg, "http.extraHeader=Authorization:") {
+			sanitized[i] = "http.extraHeader=Authorization: ***"
+		}
+	}
+
+	return sanitized
 }
 
 func errorsIsNotExist(err error) bool {

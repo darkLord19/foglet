@@ -1,9 +1,12 @@
 package main
 
 import (
+	"encoding/base64"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	foggithub "github.com/darkLord19/wtx/internal/github"
@@ -87,5 +90,54 @@ func TestEnsureBareRepoInitialized(t *testing.T) {
 	}
 	if len(calls) != 2 {
 		t.Fatalf("expected 2 git calls, got %d", len(calls))
+	}
+}
+
+func TestCloneBareRepoWithTokenFallsBackToBasic(t *testing.T) {
+	origRunner := gitRunner
+	t.Cleanup(func() { gitRunner = origRunner })
+
+	calls := make([][]string, 0, 2)
+	gitRunner = func(extraEnv []string, args ...string) error {
+		_ = extraEnv
+		calls = append(calls, append([]string(nil), args...))
+		if len(calls) == 1 {
+			return fmt.Errorf("auth failed")
+		}
+		return nil
+	}
+
+	err := cloneBareRepoWithToken("token123", "https://github.com/acme/api.git", filepath.Join(t.TempDir(), "repo.git"))
+	if err != nil {
+		t.Fatalf("expected fallback to succeed, got error: %v", err)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 git clone attempts, got %d", len(calls))
+	}
+	if !strings.Contains(calls[0][1], "Authorization: Bearer token123") {
+		t.Fatalf("first clone should use bearer header, got args: %v", calls[0])
+	}
+	if !strings.Contains(calls[1][1], "Authorization: Basic") {
+		t.Fatalf("second clone should use basic header, got args: %v", calls[1])
+	}
+}
+
+func TestBasicAuthCredential(t *testing.T) {
+	got := basicAuthCredential("abc123")
+	want := base64.StdEncoding.EncodeToString([]byte("x-access-token:abc123"))
+	if got != want {
+		t.Fatalf("basicAuthCredential mismatch: got %q want %q", got, want)
+	}
+}
+
+func TestSanitizeGitArgs(t *testing.T) {
+	args := []string{
+		"-c",
+		"http.extraHeader=Authorization: Bearer super-secret-token",
+		"clone",
+	}
+	sanitized := sanitizeGitArgs(args)
+	if strings.Contains(strings.Join(sanitized, " "), "super-secret-token") {
+		t.Fatalf("expected token to be sanitized, got args: %v", sanitized)
 	}
 }
