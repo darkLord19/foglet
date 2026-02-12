@@ -76,6 +76,8 @@ for target in "${TARGETS[@]}"; do
       go build "${GOFLAGS_COMMON[@]}" -o "${STAGE_DIR}/fog" ./cmd/fog
     GOOS="${OS}" GOARCH="${ARCH}" CGO_ENABLED=0 \
       go build "${GOFLAGS_COMMON[@]}" -o "${STAGE_DIR}/fogd" ./cmd/fogd
+    GOOS="${OS}" GOARCH="${ARCH}" CGO_ENABLED=0 \
+      go build "${GOFLAGS_COMMON[@]}" -o "${STAGE_DIR}/fogcloud" ./cmd/fogcloud
   )
 
   cp "${ROOT_DIR}/LICENSE" "${STAGE_DIR}/LICENSE"

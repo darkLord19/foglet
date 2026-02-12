@@ -85,6 +85,7 @@ class Wtx < Formula
     bin.install "#{stage}/wtx"
     bin.install "#{stage}/fog"
     bin.install "#{stage}/fogd"
+    bin.install "#{stage}/fogcloud"
     bash_completion.install "#{stage}/completions/wtx.bash" => "wtx"
     zsh_completion.install "#{stage}/completions/wtx.zsh" => "_wtx"
   end
@@ -93,6 +94,7 @@ class Wtx < Formula
     assert_match "version", shell_output("#{bin}/wtx version")
     assert_match "version", shell_output("#{bin}/fog version")
     assert_match "version", shell_output("#{bin}/fogd version")
+    assert_match "version", shell_output("#{bin}/fogcloud version")
   end
 end
 EOF

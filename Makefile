@@ -1,11 +1,11 @@
-.PHONY: build test install clean run lint wtx fog fogd all release-artifacts release-formula
+.PHONY: build test install clean run lint wtx fog fogd fogcloud all release-artifacts release-formula
 
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 RELEASE_TAG ?= v0.0.0-dev
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 
 # Build all binaries
-all: wtx fog fogd
+all: wtx fog fogd fogcloud
 
 # Build wtx
 wtx:
@@ -22,6 +22,11 @@ fogd:
 	@echo "Building fogd $(VERSION)..."
 	@go build $(LDFLAGS) -o bin/fogd ./cmd/fogd
 
+# Build fogcloud
+fogcloud:
+	@echo "Building fogcloud $(VERSION)..."
+	@go build $(LDFLAGS) -o bin/fogcloud ./cmd/fogcloud
+
 # Build all (default target)
 build: all
 
@@ -30,10 +35,11 @@ test:
 	@go test -v ./...
 
 install: all
-	@echo "Installing wtx, fog, and fogd..."
+	@echo "Installing wtx, fog, fogd, and fogcloud..."
 	@go install $(LDFLAGS) ./cmd/wtx
 	@go install $(LDFLAGS) ./cmd/fog
 	@go install $(LDFLAGS) ./cmd/fogd
+	@go install $(LDFLAGS) ./cmd/fogcloud
 
 clean:
 	@echo "Cleaning..."

@@ -239,10 +239,15 @@ GOCACHE=/tmp/go-build go test ./internal/cloud
 Manual (install/event routes):
 
 ```bash
-# mount internal/cloud.Server routes in a local test binary or harness
-# then validate:
-curl http://localhost:<port>/health
-curl -i http://localhost:<port>/slack/install
+fogcloud \
+  --port 9090 \
+  --public-url https://fog-cloud.example \
+  --slack-client-id <id> \
+  --slack-client-secret <secret> \
+  --slack-signing-secret <secret>
+
+curl http://localhost:9090/health
+curl -i http://localhost:9090/slack/install
 ```
 
 Expected checks:

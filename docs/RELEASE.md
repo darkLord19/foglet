@@ -10,6 +10,7 @@ Each archive includes:
 - `wtx`
 - `fog`
 - `fogd`
+- `fogcloud`
 - shell completions
 
 ## Local release build
@@ -39,7 +40,7 @@ make release-formula RELEASE_TAG=v0.2.0
 
 Formula behavior:
 - selects correct asset URL by OS/CPU architecture
-- installs `wtx`, `fog`, and `fogd`
+- installs `wtx`, `fog`, `fogd`, and `fogcloud`
 - installs `wtx` completions
 
 ## GitHub release wiring

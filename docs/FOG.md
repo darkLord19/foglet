@@ -82,6 +82,13 @@ fogd --enable-slack --slack-mode socket \
      --slack-app-token <xapp-...> # Socket Mode (@fog mentions)
 fogd --cloud-url https://fog-cloud.example \
      --cloud-poll-interval 2s     # Cloud relay mode (paired device required)
+
+# Optional distributed Slack control plane
+fogcloud --port 9090 \
+  --public-url https://fog-cloud.example \
+  --slack-client-id <id> \
+  --slack-client-secret <secret> \
+  --slack-signing-secret <secret>
 ```
 
 ## Installation
@@ -94,6 +101,7 @@ make install
 go install github.com/darkLord19/wtx/cmd/wtx@latest
 go install github.com/darkLord19/wtx/cmd/fog@latest
 go install github.com/darkLord19/wtx/cmd/fogd@latest
+go install github.com/darkLord19/wtx/cmd/fogcloud@latest
 ```
 
 ## Quick Start

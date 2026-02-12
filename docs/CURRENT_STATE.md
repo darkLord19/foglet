@@ -73,7 +73,20 @@ This document reflects the currently implemented product surface in this reposit
   - `POST /api/sessions/{id}/runs` runs async by default
   - branch name is generated from `branch_prefix` + prompt slug when `branch_name` is omitted
 
-### `internal/cloud` (distribution foundation, not wired to a binary yet)
+### `fogcloud` (distribution control plane)
+- Dedicated binary at `cmd/fogcloud`.
+- Runs cloud Slack install/event routing over `internal/cloud`.
+- Exposes:
+  - `/health`
+  - `/slack/install`
+  - `/slack/oauth/callback`
+  - `/slack/events`
+  - `POST /v1/pair/claim`
+  - `POST /v1/pair/unpair`
+  - `POST /v1/device/jobs/claim`
+  - `POST /v1/device/jobs/{id}/complete`
+
+### `internal/cloud` (distribution foundation)
 - Slack install/event server primitives are implemented:
   - `/health`
   - `/slack/install`
@@ -163,7 +176,6 @@ Default tool must be explicitly configured, otherwise API/Slack/CLI task creatio
 ## What is intentionally not implemented yet
 
 - Full OAuth onboarding (PAT-only today).
-- Standalone `fogcloud` binary wiring (cloud server package exists; CLI binary pending).
 - PR comment rerun loop.
 - Containerized task isolation.
 - Production-ready team/multi-user auth model.

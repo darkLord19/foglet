@@ -11,7 +11,7 @@ NO_SUDO="false"
 
 usage() {
   cat <<'EOF'
-Install wtx/fog/fogd from GitHub release artifacts (Linux only).
+Install wtx/fog/fogd/fogcloud from GitHub release artifacts (Linux only).
 
 Usage:
   scripts/install-linux.sh [options]
@@ -249,11 +249,13 @@ fi
 install_binary "${STAGE_DIR}/wtx" "${INSTALL_TO}"
 install_binary "${STAGE_DIR}/fog" "${INSTALL_TO}"
 install_binary "${STAGE_DIR}/fogd" "${INSTALL_TO}"
+install_binary "${STAGE_DIR}/fogcloud" "${INSTALL_TO}"
 
 echo "installed successfully:"
 echo "  ${INSTALL_TO}/wtx"
 echo "  ${INSTALL_TO}/fog"
 echo "  ${INSTALL_TO}/fogd"
+echo "  ${INSTALL_TO}/fogcloud"
 
 if [[ "${INSTALL_TO}" != */bin ]]; then
   echo "note: add ${INSTALL_TO} to PATH"
