@@ -185,6 +185,23 @@ Expected checks:
 - settings form updates `default_tool` and `branch_prefix`
 - cloud section can save `cloud_url`, pair with a code, and unpair a user mapping
 
+## 6.1 Wails Desktop UI smoke test (preview)
+
+Prerequisites:
+- Wails CLI installed
+- local desktop environment available (not headless CI)
+
+Run:
+
+```bash
+make fogapp-dev
+```
+
+Expected checks:
+- app starts and `fogd` is auto-started when not already running
+- desktop dashboard renders sessions/repo/settings/cloud panels
+- new session + follow-up actions work the same as web UI
+
 ## 7. Slack HTTP mode test
 
 Start daemon:

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "fogapp",
+  "outputfilename": "fogapp",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev:watcher": "",
+  "frontend:dev:serverUrl": "",
+  "author": {
+    "name": "Umang Parmar",
+    "email": "umangjparmar@gmail.com"
+  },
+  "info": {
+    "companyName": "Fog",
+    "productName": "Fog Desktop",
+    "productVersion": "0.0.0"
+  }
+}

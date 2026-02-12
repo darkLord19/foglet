@@ -1,4 +1,4 @@
-.PHONY: build test install clean run lint wtx fog fogd fogcloud all release-artifacts release-formula
+.PHONY: build test install clean run lint wtx fog fogd fogcloud fogapp-dev fogapp-build all release-artifacts release-formula
 
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 RELEASE_TAG ?= v0.0.0-dev
@@ -26,6 +26,14 @@ fogd:
 fogcloud:
 	@echo "Building fogcloud $(VERSION)..."
 	@go build $(LDFLAGS) -o bin/fogcloud ./cmd/fogcloud
+
+fogapp-dev:
+	@echo "Starting fogapp in Wails dev mode..."
+	@cd cmd/fogapp && wails dev -tags desktop
+
+fogapp-build:
+	@echo "Building fogapp desktop binary..."
+	@cd cmd/fogapp && wails build -tags desktop
 
 # Build all (default target)
 build: all

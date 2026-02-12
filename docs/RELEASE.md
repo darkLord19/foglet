@@ -13,6 +13,9 @@ Each archive includes:
 - `fogcloud`
 - shell completions
 
+Current scope:
+- Wails desktop app (`fogapp`) is not part of release artifacts yet.
+
 ## Local release build
 
 ```bash

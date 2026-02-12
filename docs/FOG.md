@@ -102,6 +102,7 @@ go install github.com/darkLord19/wtx/cmd/wtx@latest
 go install github.com/darkLord19/wtx/cmd/fog@latest
 go install github.com/darkLord19/wtx/cmd/fogd@latest
 go install github.com/darkLord19/wtx/cmd/fogcloud@latest
+# fogapp is built via Wails (desktop preview), not plain go install
 ```
 
 ## Quick Start
@@ -375,6 +376,29 @@ fog ui
 # - active/all task list (auto-refresh)
 # - default tool + branch prefix settings editor
 ```
+
+### 7. Start Wails Desktop UI (Preview)
+
+Prerequisites:
+- Wails CLI (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`)
+- Desktop dependencies required by Wails for your OS
+
+Run:
+
+```bash
+make fogapp-dev
+```
+
+Build:
+
+```bash
+make fogapp-build
+```
+
+Notes:
+- Desktop entrypoint is at `cmd/fogapp`.
+- Desktop mode ensures `fogd` is running and then uses the same local HTTP APIs.
+- Build uses `desktop` build tag.
 
 **GET /api/tasks/{id}**
 ```bash

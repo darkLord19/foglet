@@ -64,7 +64,7 @@ fogd --port 8080 --enable-slack --slack-mode socket \
 make install
 
 # Or via Go
-go install github.com/darkLord19/wtx/cmd/{wtx,fog,fogd}@latest
+go install github.com/darkLord19/wtx/cmd/{wtx,fog,fogd,fogcloud}@latest
 
 # Linux installer (release artifacts + checksum verify)
 scripts/install-linux.sh
@@ -113,6 +113,10 @@ fogd --port 8080
 fog ui
 # If PAT/default tool are missing, UI shows onboarding first.
 
+# 3c. Desktop UI preview (Wails)
+# requires Wails CLI installed
+make fogapp-dev
+
 # 4. Discover/import repos via configured PAT
 fog repos discover
 fog repos import
@@ -158,6 +162,7 @@ Duration: 2m 30s
 - 🌐 **HTTP API** - RESTful task management
 - 💬 **Slack** - HTTP slash commands + Socket Mode (`@fog`) with thread follow-ups
 - 🖥️ **Built-in Web UI** - Served by fogd at `/`; `fog ui` auto-starts fogd if needed
+- 🧩 **Wails Desktop Preview** - `cmd/fogapp` desktop shell over local fogd APIs
 - 🔄 **Async** - Fire-and-forget execution
 - 📢 **Notifications** - Completion alerts
 - 🔌 **Extensible** - Easy to add integrations

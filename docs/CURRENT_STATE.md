@@ -68,6 +68,21 @@ This document reflects the currently implemented product surface in this reposit
   - configure cloud URL + pairing in local API/UI
   - `fogd` claims cloud jobs for the paired device and executes them through session runner
   - completion is posted back through cloud API and thread mapping is preserved
+
+### `fogapp` (Wails desktop preview)
+- Wails desktop shell scaffold exists at `cmd/fogapp`.
+- Startup behavior:
+  - ensures local `fogd` is running on `127.0.0.1:8080`
+  - loads a desktop-focused UI over existing Fog HTTP APIs
+- Desktop UI supports:
+  - session list and follow-up workflow
+  - new session composer (`repo`, `tool`, `model`, `branch_name`, `autopr`, prompt)
+  - repo discover/import
+  - settings update (`default_tool`, `branch_prefix`)
+  - cloud URL save + pair + unpair
+- Current status:
+  - Desktop build uses `desktop` build tag and Wails CLI workflow.
+  - AppImage packaging pipeline is not wired yet.
 - Session API defaults:
   - `POST /api/sessions` runs async by default and returns session/run ids
   - `POST /api/sessions/{id}/runs` runs async by default
@@ -176,6 +191,7 @@ Default tool must be explicitly configured, otherwise API/Slack/CLI task creatio
 ## What is intentionally not implemented yet
 
 - Full OAuth onboarding (PAT-only today).
+- Fog desktop AppImage packaging/release pipeline.
 - PR comment rerun loop.
 - Containerized task isolation.
 - Production-ready team/multi-user auth model.
