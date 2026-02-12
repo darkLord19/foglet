@@ -158,13 +158,14 @@ const webUIHTML = `<!doctype html>
             <thead>
               <tr>
                 <th>State</th>
+                <th>Repo</th>
                 <th>Branch</th>
                 <th>Tool</th>
                 <th>Created</th>
               </tr>
             </thead>
             <tbody id="task-body">
-              <tr><td colspan="4">Loading tasks...</td></tr>
+              <tr><td colspan="5">Loading tasks...</td></tr>
             </tbody>
           </table>
         </div>
@@ -237,20 +238,22 @@ const webUIHTML = `<!doctype html>
         document.getElementById("kpi-updated").textContent = new Date().toLocaleTimeString();
 
         if (!tasks.length) {
-          body.innerHTML = "<tr><td colspan='4'>No tasks yet</td></tr>";
+          body.innerHTML = "<tr><td colspan='5'>No tasks yet</td></tr>";
           return;
         }
 
         body.innerHTML = tasks.slice(0, 40).map(function (t) {
+          var repo = (t.metadata && t.metadata.repo) ? t.metadata.repo : "-";
           return "<tr>" +
             "<td><span class='" + stateClass(t.state) + "'>" + escapeHTML(t.state) + "</span></td>" +
+            "<td class='mono'>" + escapeHTML(repo) + "</td>" +
             "<td class='mono'>" + escapeHTML(t.branch) + "</td>" +
             "<td>" + escapeHTML(t.ai_tool) + "</td>" +
             "<td>" + escapeHTML(formatDate(t.created_at)) + "</td>" +
             "</tr>";
         }).join("");
       } catch (err) {
-        body.innerHTML = "<tr><td colspan='4'>Failed to load tasks: " + escapeHTML(err.message) + "</td></tr>";
+        body.innerHTML = "<tr><td colspan='5'>Failed to load tasks: " + escapeHTML(err.message) + "</td></tr>";
       }
     }
 
