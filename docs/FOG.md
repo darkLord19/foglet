@@ -7,6 +7,7 @@ Fog orchestrates AI coding tasks using existing AI tools (Cursor, Claude Code, A
 Supporting docs:
 - Current implementation snapshot: `docs/CURRENT_STATE.md`
 - End-to-end validation steps: `docs/TESTING.md`
+- Release and Homebrew packaging: `docs/RELEASE.md`
 
 ## Architecture
 

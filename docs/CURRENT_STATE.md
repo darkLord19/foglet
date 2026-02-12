@@ -73,6 +73,17 @@ State details:
 - Managed repos stored in repos table.
 - Task runs stored in SQLite task table(s).
 
+## Distribution
+
+- Release artifact builder script:
+  - `scripts/release/build-artifacts.sh`
+- Homebrew formula generator:
+  - `scripts/release/generate-homebrew-formula.sh`
+- Release workflow:
+  - `.github/workflows/release.yml` (tag `v*`)
+- Linux installer:
+  - `scripts/install-linux.sh` (checksum verify + version pin)
+
 ## AI tools
 
 Supported adapters:

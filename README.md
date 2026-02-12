@@ -65,7 +65,15 @@ make install
 
 # Or via Go
 go install github.com/darkLord19/wtx/cmd/{wtx,fog,fogd}@latest
+
+# Linux installer (release artifacts + checksum verify)
+scripts/install-linux.sh
+
+# Version-pinned Linux install
+scripts/install-linux.sh --version v0.1.0
 ```
+
+Release tags (`v*`) publish multi-platform archives and a generated Homebrew formula (`wtx.rb`) artifact.
 
 ### Basic Usage
 
@@ -157,6 +165,7 @@ Duration: 2m 30s
 
 - **[Current State](docs/CURRENT_STATE.md)** - Implemented behavior snapshot
 - **[Testing Guide](docs/TESTING.md)** - Automated + end-to-end validation steps
+- **[Release Guide](docs/RELEASE.md)** - Artifact packaging, Homebrew formula generation, release workflow
 - **[Complete Fog Guide](docs/FOG.md)** - Full documentation
 - **[Project Summary](PROJECT_SUMMARY.md)** - Implementation details
 - **[Contributing](CONTRIBUTING.md)** - Development guide

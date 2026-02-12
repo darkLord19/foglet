@@ -1,0 +1,60 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build release artifacts
+        run: |
+          chmod +x scripts/release/build-artifacts.sh
+          scripts/release/build-artifacts.sh "${GITHUB_REF_NAME}" dist
+
+      - name: Generate Homebrew formula
+        run: |
+          chmod +x scripts/release/generate-homebrew-formula.sh
+          scripts/release/generate-homebrew-formula.sh \
+            "${GITHUB_REF_NAME}" \
+            "dist/wtx_${GITHUB_REF_NAME#v}_checksums.txt" \
+            "${GITHUB_REPOSITORY}" > dist/wtx.rb
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*checksums.txt
+            dist/wtx.rb
+
+      - name: Publish Homebrew formula to tap
+        if: ${{ secrets.HOMEBREW_TAP_REPO != '' && secrets.HOMEBREW_TAP_PAT != '' }}
+        env:
+          HOMEBREW_TAP_REPO: ${{ secrets.HOMEBREW_TAP_REPO }}
+          HOMEBREW_TAP_PAT: ${{ secrets.HOMEBREW_TAP_PAT }}
+        run: |
+          git clone "https://${HOMEBREW_TAP_PAT}@github.com/${HOMEBREW_TAP_REPO}.git" tap
+          mkdir -p tap/Formula
+          cp dist/wtx.rb tap/Formula/wtx.rb
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/wtx.rb
+          git commit -m "chore: update wtx formula for ${GITHUB_REF_NAME}" || exit 0
+          git push

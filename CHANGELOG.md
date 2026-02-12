@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings API** - Added `GET/PUT /api/settings` for `default_tool` and `branch_prefix`
 - **Cursor headless adapter** - Cursor now runs via `cursor-agent` instead of opening GUI only
 - **Dual PAT clone auth** - Managed repo import now supports both Bearer and Basic auth strategies for PAT compatibility
+- **Release artifact builder** - `scripts/release/build-artifacts.sh` builds multi-platform tarballs + checksums
+- **Homebrew formula generator** - `scripts/release/generate-homebrew-formula.sh` generates versioned `wtx.rb` from release checksums
+- **Release workflow wiring** - Tag push (`v*`) now publishes artifacts and generated formula via GitHub Actions
+- **Linux installer (hardened)** - `scripts/install-linux.sh` with checksum verification and version pin support
 
 ### Added - wtx Enhancements
 - `wtx status <n>` - Detailed worktree status
@@ -53,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Complete Fog guide (docs/FOG.md)
 - Current state snapshot (docs/CURRENT_STATE.md)
 - End-to-end testing guide (docs/TESTING.md)
+- Release guide (docs/RELEASE.md)
 - API documentation
 - Slack integration guide
 - Task lifecycle documentation

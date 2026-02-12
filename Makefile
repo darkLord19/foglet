@@ -1,6 +1,7 @@
-.PHONY: build test install clean run lint wtx fog fogd all
+.PHONY: build test install clean run lint wtx fog fogd all release-artifacts release-formula
 
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+RELEASE_TAG ?= v0.0.0-dev
 LDFLAGS := -ldflags "-X main.version=$(VERSION)"
 
 # Build all binaries
@@ -48,3 +49,17 @@ lint:
 
 dev: build
 	@./bin/wtx
+
+release-artifacts:
+	@echo "Building release artifacts for $(RELEASE_TAG)..."
+	@chmod +x scripts/release/build-artifacts.sh
+	@scripts/release/build-artifacts.sh "$(RELEASE_TAG)" dist
+
+release-formula: release-artifacts
+	@echo "Generating Homebrew formula for $(RELEASE_TAG)..."
+	@chmod +x scripts/release/generate-homebrew-formula.sh
+	@scripts/release/generate-homebrew-formula.sh \
+		"$(RELEASE_TAG)" \
+		"dist/wtx_$$(echo $(RELEASE_TAG) | sed 's/^v//')_checksums.txt" \
+		"darkLord19/wtx" > dist/wtx.rb
+	@echo "Formula generated at dist/wtx.rb"

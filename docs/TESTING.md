@@ -200,6 +200,8 @@ scripts/release/generate-homebrew-formula.sh v0.0.0-test dist/wtx_0.0.0-test_che
 
 ## 10. Linux installer smoke test
 
+Run this section on a Linux host.
+
 Dry-run latest release resolution:
 
 ```bash
