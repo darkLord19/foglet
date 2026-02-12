@@ -1,0 +1,97 @@
+{
+  "name": "wtx",
+  "displayName": "wtx - Worktree Manager",
+  "description": "Fast Git worktree switcher for VS Code",
+  "version": "0.1.0",
+  "publisher": "yourusername",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/wtx"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:wtx.switch",
+    "onCommand:wtx.list",
+    "onCommand:wtx.create",
+    "onCommand:wtx.delete",
+    "onView:wtxWorkspaces"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "wtx.switch",
+        "title": "Switch Worktree",
+        "category": "wtx"
+      },
+      {
+        "command": "wtx.list",
+        "title": "List Worktrees",
+        "category": "wtx"
+      },
+      {
+        "command": "wtx.create",
+        "title": "Create Worktree",
+        "category": "wtx"
+      },
+      {
+        "command": "wtx.delete",
+        "title": "Delete Worktree",
+        "category": "wtx"
+      },
+      {
+        "command": "wtx.refresh",
+        "title": "Refresh",
+        "category": "wtx",
+        "icon": "$(refresh)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "wtx.switch",
+        "key": "ctrl+shift+w",
+        "mac": "cmd+shift+w"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "wtxWorkspaces",
+          "name": "Worktrees"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "wtx.refresh",
+          "when": "view == wtxWorkspaces",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "wtx.delete",
+          "when": "view == wtxWorkspaces"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.80.0",
+    "@vscode/vsce": "^2.19.0",
+    "typescript": "^5.0.0"
+  }
+}
