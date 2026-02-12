@@ -26,6 +26,7 @@ GOCACHE=/tmp/go-build go test ./cmd/fog
 GOCACHE=/tmp/go-build go test ./cmd/fogd
 GOCACHE=/tmp/go-build go test ./internal/api
 GOCACHE=/tmp/go-build go test ./internal/slack
+GOCACHE=/tmp/go-build go test ./internal/cloud
 GOCACHE=/tmp/go-build go test ./internal/state
 GOCACHE=/tmp/go-build go test ./internal/runner
 ```
@@ -221,7 +222,30 @@ Expected checks:
 - bot acks and posts progress/completion in thread.
 - follow-up reuses thread context and launches another task.
 
-## 9. Release packaging smoke test
+## 9. Cloud foundation tests
+
+Automated:
+
+```bash
+GOCACHE=/tmp/go-build go test ./internal/cloud
+```
+
+Manual (install/event routes):
+
+```bash
+# mount internal/cloud.Server routes in a local test binary or harness
+# then validate:
+curl http://localhost:<port>/health
+curl -i http://localhost:<port>/slack/install
+```
+
+Expected checks:
+- `/health` returns JSON status payload.
+- `/slack/install` redirects to Slack OAuth with client_id/state/redirect_uri.
+- OAuth callback persists encrypted workspace bot token in cloud store.
+- duplicate Slack event ids are ignored.
+
+## 10. Release packaging smoke test
 
 From repo root:
 
@@ -238,7 +262,7 @@ Expected checks:
 scripts/release/generate-homebrew-formula.sh v0.0.0-test dist/wtx_0.0.0-test_checksums.txt
 ```
 
-## 10. Linux installer smoke test
+## 11. Linux installer smoke test
 
 Run this section on a Linux host.
 

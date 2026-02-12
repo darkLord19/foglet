@@ -65,6 +65,23 @@ This document reflects the currently implemented product surface in this reposit
   - `POST /api/sessions/{id}/runs` runs async by default
   - branch name is generated from `branch_prefix` + prompt slug when `branch_name` is omitted
 
+### `internal/cloud` (distribution foundation, not wired to a binary yet)
+- Slack install/event server primitives are implemented:
+  - `/health`
+  - `/slack/install`
+  - `/slack/oauth/callback`
+  - `/slack/events`
+- Multi-workspace install persistence:
+  - one installation row per Slack workspace (`team_id`)
+  - bot token encrypted at rest with local AES-GCM key file
+- Pairing and routing metadata persistence primitives:
+  - `(team_id, slack_user_id) -> device_id` pairings
+  - per-thread session mapping (`team/channel/root_ts -> session_id`)
+  - Slack event id dedupe storage
+- Current app mention behavior:
+  - unpaired user => ephemeral "not paired" response
+  - paired user => placeholder ephemeral response (routing execution in next slices)
+
 ## Slack command contract
 
 Initial task syntax:
@@ -100,6 +117,7 @@ State details:
   - `runs`
   - `run_events`
   This is the persistence base for the upcoming desktop session UI and follow-up workflow.
+- Cloud foundation uses a separate SQLite file (`fogcloud.db`) and key file (`cloud.key`) in its configured data dir.
 
 ## Distribution
 
@@ -124,6 +142,7 @@ Default tool must be explicitly configured, otherwise API/Slack/CLI task creatio
 ## What is intentionally not implemented yet
 
 - Full OAuth onboarding (PAT-only today).
+- End-to-end cloud relay (device claim/dispatch execution loop).
 - PR comment rerun loop.
 - Containerized task isolation.
 - Production-ready team/multi-user auth model.
