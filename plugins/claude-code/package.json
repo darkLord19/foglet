@@ -1,0 +1,35 @@
+{
+  "name": "wtx-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for wtx Git worktree manager",
+  "main": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "wtx-mcp-server": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "git",
+    "worktree",
+    "wtx",
+    "claude"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/wtx"
+  }
+}
