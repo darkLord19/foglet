@@ -12,6 +12,7 @@ import (
 	"github.com/darkLord19/wtx/internal/env"
 	"github.com/darkLord19/wtx/internal/runner"
 	"github.com/darkLord19/wtx/internal/slack"
+	"github.com/darkLord19/wtx/internal/state"
 	"github.com/spf13/cobra"
 )
 
@@ -77,11 +78,17 @@ func runDaemon() error {
 		return err
 	}
 
+	stateStore, err := state.NewStore(configDir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = stateStore.Close() }()
+
 	// Create mux
 	mux := http.NewServeMux()
 
 	// Register API routes
-	apiServer := api.New(r, flagPort)
+	apiServer := api.New(r, stateStore, flagPort)
 	apiServer.RegisterRoutes(mux)
 
 	// Register Slack integration if enabled
@@ -90,7 +97,7 @@ func runDaemon() error {
 			log.Println("Warning: Slack enabled but no signing secret provided")
 		}
 
-		slackHandler := slack.New(r, flagSlackSecret)
+		slackHandler := slack.New(r, stateStore, flagSlackSecret)
 		mux.HandleFunc("/slack/command", slackHandler.HandleCommand)
 
 		log.Println("Slack integration enabled")

@@ -9,19 +9,23 @@ import (
 	"time"
 
 	"github.com/darkLord19/wtx/internal/runner"
+	"github.com/darkLord19/wtx/internal/state"
 	"github.com/darkLord19/wtx/internal/task"
+	"github.com/darkLord19/wtx/internal/toolcfg"
 	"github.com/google/uuid"
 )
 
 // Handler handles Slack slash commands and interactions
 type Handler struct {
+	stateStore    *state.Store
 	runner        *runner.Runner
 	signingSecret string
 }
 
 // New creates a new Slack handler
-func New(runner *runner.Runner, signingSecret string) *Handler {
+func New(runner *runner.Runner, stateStore *state.Store, signingSecret string) *Handler {
 	return &Handler{
+		stateStore:    stateStore,
 		runner:        runner,
 		signingSecret: signingSecret,
 	}
@@ -106,13 +110,17 @@ func (h *Handler) parseCommand(text string) (*task.Task, error) {
 
 	branch := matches[1]
 	prompt := matches[2]
+	tool, err := toolcfg.ResolveTool("", h.stateStore, "slack")
+	if err != nil {
+		return nil, err
+	}
 
 	t := &task.Task{
 		ID:        uuid.New().String(),
 		State:     task.StateCreated,
 		Branch:    branch,
 		Prompt:    prompt,
-		AITool:    "claude", // Default
+		AITool:    tool,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		Options: task.Options{

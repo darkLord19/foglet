@@ -7,21 +7,25 @@ import (
 	"time"
 
 	"github.com/darkLord19/wtx/internal/runner"
+	"github.com/darkLord19/wtx/internal/state"
 	"github.com/darkLord19/wtx/internal/task"
+	"github.com/darkLord19/wtx/internal/toolcfg"
 	"github.com/google/uuid"
 )
 
 // Server provides HTTP API for Fog
 type Server struct {
-	runner *runner.Runner
-	port   int
+	runner     *runner.Runner
+	stateStore *state.Store
+	port       int
 }
 
 // New creates a new API server
-func New(runner *runner.Runner, port int) *Server {
+func New(runner *runner.Runner, stateStore *state.Store, port int) *Server {
 	return &Server{
-		runner: runner,
-		port:   port,
+		runner:     runner,
+		stateStore: stateStore,
+		port:       port,
 	}
 }
 
@@ -88,8 +92,10 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.AITool == "" {
-		req.AITool = "claude"
+	tool, err := toolcfg.ResolveTool(req.AITool, s.stateStore, "api")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	// Create task
@@ -98,7 +104,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		State:     task.StateCreated,
 		Branch:    req.Branch,
 		Prompt:    req.Prompt,
-		AITool:    req.AITool,
+		AITool:    tool,
 		Options:   req.Options,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),

@@ -8,7 +8,9 @@ import (
 
 	"github.com/darkLord19/wtx/internal/env"
 	"github.com/darkLord19/wtx/internal/runner"
+	"github.com/darkLord19/wtx/internal/state"
 	"github.com/darkLord19/wtx/internal/task"
+	"github.com/darkLord19/wtx/internal/toolcfg"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
@@ -96,7 +98,7 @@ var versionCmd = &cobra.Command{
 func init() {
 	// run command flags
 	runCmd.Flags().StringVar(&flagBranch, "branch", "", "Branch name (required)")
-	runCmd.Flags().StringVar(&flagTool, "tool", "claude", "AI tool to use (cursor, claude, aider)")
+	runCmd.Flags().StringVar(&flagTool, "tool", "", "AI tool to use (cursor, claude, aider)")
 	runCmd.Flags().StringVar(&flagPrompt, "prompt", "", "Task prompt (required)")
 	runCmd.Flags().BoolVar(&flagCommit, "commit", false, "Commit changes after AI completes")
 	runCmd.Flags().BoolVar(&flagPR, "pr", false, "Create pull request")
@@ -132,6 +134,17 @@ func runTask() error {
 	}
 	configDir := fogHome
 
+	stateStore, err := state.NewStore(fogHome)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = stateStore.Close() }()
+
+	resolvedTool, err := toolcfg.ResolveTool(flagTool, stateStore, "cli")
+	if err != nil {
+		return err
+	}
+
 	// Create runner
 	r, err := runner.New(cwd, configDir)
 	if err != nil {
@@ -144,7 +157,7 @@ func runTask() error {
 		State:     task.StateCreated,
 		Branch:    flagBranch,
 		Prompt:    flagPrompt,
-		AITool:    flagTool,
+		AITool:    resolvedTool,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		Options: task.Options{

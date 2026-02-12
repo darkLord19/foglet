@@ -123,6 +123,7 @@ fog run \
   --setup-cmd "npm install" \
   --validate-cmd "npm test" \
   --commit
+# --tool is optional once default_tool is configured via `fog setup`
 ```
 
 ### 4. Discover/import repositories
@@ -153,6 +154,7 @@ curl -X POST http://localhost:8080/api/tasks/create \
       "async": true
     }
   }'
+# ai_tool can be omitted only when default_tool exists
 ```
 
 ## Task Lifecycle

@@ -76,6 +76,7 @@ fog run \
   --tool claude \
   --prompt "Add OTP login" \
   --commit
+# --tool is optional once default_tool is configured by `fog setup`
 
 # 2. With validation
 fog run \
@@ -189,6 +190,7 @@ fog list  # See all active tasks
 # Via API
 curl -X POST http://localhost:8080/api/tasks/create \
   -d '{"branch":"fix","prompt":"Fix bug","ai_tool":"claude"}'
+# ai_tool can be omitted only when default_tool is configured
 ```
 
 ## 🔧 AI Tool Support
