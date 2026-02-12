@@ -43,6 +43,7 @@ fog run \
 
 fog list              # List tasks
 fog status <id>       # Task status
+fog config view       # Combined wtx + fog config view
 ```
 
 ### 3. fogd - Control Plane
@@ -72,6 +73,10 @@ go install github.com/darkLord19/wtx/cmd/{wtx,fog,fogd}@latest
 # 0. One-time onboarding (PAT + default tool)
 fog setup
 # Supports both classic and fine-grained GitHub PATs
+
+# 0b. Optional: inspect or update Fog settings
+fog config view
+fog config set --branch-prefix team --default-tool claude
 
 # 1. Simple AI task
 fog run \

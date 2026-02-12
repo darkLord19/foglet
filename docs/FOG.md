@@ -50,6 +50,8 @@ fog run \
 
 fog list              # List all tasks
 fog status <id>       # Task status
+fog config view       # Combined wtx + fog config
+fog config set --branch-prefix team --default-tool claude
 fog repos discover    # List repos accessible by PAT
 fog repos import      # Select and register repos
 fog repos list        # List registered repos
