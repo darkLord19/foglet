@@ -244,6 +244,9 @@ Expected checks:
 - `/slack/install` redirects to Slack OAuth with client_id/state/redirect_uri.
 - OAuth callback persists encrypted workspace bot token in cloud store.
 - duplicate Slack event ids are ignored.
+- unpaired `app_mention` generates a one-time pairing code response.
+- paired `app_mention` queues a job claimable via `POST /v1/device/jobs/claim`.
+- `POST /v1/device/jobs/{id}/complete` posts completion into the Slack thread and stores thread→session mapping.
 
 ## 10. Release packaging smoke test
 

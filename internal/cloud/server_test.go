@@ -238,6 +238,190 @@ func TestHandleEventsAppMentionUnpairedPostsEphemeral(t *testing.T) {
 	}
 }
 
+func TestHandleEventsAppMentionPairedQueuesJobAndDeviceClaimsIt(t *testing.T) {
+	store := newCloudStore(t)
+	defer func() { _ = store.Close() }()
+
+	if err := store.SaveInstallation("T111", "U_BOT", "xoxb-test-token"); err != nil {
+		t.Fatalf("save installation failed: %v", err)
+	}
+	pairReq, err := store.CreatePairingRequest("T111", "U1", "C1", "123.456", 5*time.Minute)
+	if err != nil {
+		t.Fatalf("create pairing request failed: %v", err)
+	}
+	claim, err := store.ClaimPairingRequest(pairReq.Code, "device-a", "")
+	if err != nil {
+		t.Fatalf("claim pairing request failed: %v", err)
+	}
+
+	msgCh := make(chan map[string]string, 1)
+	slackMux := http.NewServeMux()
+	slackMux.HandleFunc("/chat.postMessage", func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload failed: %v", err)
+		}
+		msgCh <- payload
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+	})
+	slackServer := newHTTPTestServerOrSkip(t, slackMux)
+	defer slackServer.Close()
+
+	server, err := NewServer(store, Config{
+		ClientID:      "cid",
+		ClientSecret:  "secret",
+		SigningSecret: "signing-secret",
+		PublicURL:     "https://fogcloud.example",
+		APIBaseURL:    slackServer.URL,
+	})
+	if err != nil {
+		t.Fatalf("new server failed: %v", err)
+	}
+	mux := http.NewServeMux()
+	server.RegisterRoutes(mux)
+
+	body := []byte(`{
+		"type":"event_callback",
+		"team_id":"T111",
+		"event_id":"Ev-2",
+		"event":{
+			"type":"app_mention",
+			"channel":"C1",
+			"user":"U1",
+			"text":"<@U_BOT> [repo='owner/repo' tool='claude' autopr=true] implement auth",
+			"ts":"123.456"
+		}
+	}`)
+	req := signedSlackRequest(t, "/slack/events", "signing-secret", body, time.Now().UTC())
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", rec.Code)
+	}
+
+	select {
+	case payload := <-msgCh:
+		if payload["channel"] != "C1" || payload["thread_ts"] != "123.456" {
+			t.Fatalf("unexpected message payload: %+v", payload)
+		}
+		if !strings.Contains(payload["text"], "Queued on your paired Fog device") {
+			t.Fatalf("unexpected message text: %q", payload["text"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for queued message")
+	}
+
+	claimReq := httptest.NewRequest(http.MethodPost, "/v1/device/jobs/claim", nil)
+	claimReq.Header.Set("X-Fog-Device-ID", "device-a")
+	claimReq.Header.Set("Authorization", "Bearer "+claim.DeviceToken)
+	claimRec := httptest.NewRecorder()
+	mux.ServeHTTP(claimRec, claimReq)
+	if claimRec.Code != http.StatusOK {
+		t.Fatalf("unexpected claim status: got=%d body=%q", claimRec.Code, claimRec.Body.String())
+	}
+	var job Job
+	if err := json.NewDecoder(claimRec.Body).Decode(&job); err != nil {
+		t.Fatalf("decode claimed job failed: %v", err)
+	}
+	if job.Kind != jobKindStartSession || job.Repo != "owner/repo" || job.Tool != "claude" {
+		t.Fatalf("unexpected claimed job: %+v", job)
+	}
+}
+
+func TestDeviceJobCompleteMapsThreadSessionAndPostsCompletion(t *testing.T) {
+	store := newCloudStore(t)
+	defer func() { _ = store.Close() }()
+
+	if err := store.SaveInstallation("T111", "U_BOT", "xoxb-test-token"); err != nil {
+		t.Fatalf("save installation failed: %v", err)
+	}
+	pairReq, err := store.CreatePairingRequest("T111", "U1", "C1", "123.456", 5*time.Minute)
+	if err != nil {
+		t.Fatalf("create pairing request failed: %v", err)
+	}
+	claim, err := store.ClaimPairingRequest(pairReq.Code, "device-a", "")
+	if err != nil {
+		t.Fatalf("claim pairing request failed: %v", err)
+	}
+	job, err := store.EnqueueJob(Job{
+		DeviceID:    "device-a",
+		TeamID:      "T111",
+		ChannelID:   "C1",
+		RootTS:      "123.456",
+		SlackUserID: "U1",
+		Kind:        jobKindStartSession,
+		Repo:        "owner/repo",
+		Prompt:      "implement auth",
+	})
+	if err != nil {
+		t.Fatalf("enqueue job failed: %v", err)
+	}
+
+	msgCh := make(chan map[string]string, 1)
+	slackMux := http.NewServeMux()
+	slackMux.HandleFunc("/chat.postMessage", func(w http.ResponseWriter, r *http.Request) {
+		var payload map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload failed: %v", err)
+		}
+		msgCh <- payload
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true})
+	})
+	slackServer := newHTTPTestServerOrSkip(t, slackMux)
+	defer slackServer.Close()
+
+	server, err := NewServer(store, Config{
+		ClientID:      "cid",
+		ClientSecret:  "secret",
+		SigningSecret: "signing-secret",
+		PublicURL:     "https://fogcloud.example",
+		APIBaseURL:    slackServer.URL,
+	})
+	if err != nil {
+		t.Fatalf("new server failed: %v", err)
+	}
+	mux := http.NewServeMux()
+	server.RegisterRoutes(mux)
+
+	payload := map[string]interface{}{
+		"success":    true,
+		"session_id": "session-1",
+		"run_id":     "run-1",
+		"branch":     "fog/auth",
+		"pr_url":     "https://github.com/acme/repo/pull/1",
+	}
+	raw, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/v1/device/jobs/"+job.ID+"/complete", bytes.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Fog-Device-ID", "device-a")
+	req.Header.Set("Authorization", "Bearer "+claim.DeviceToken)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status: got=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	sessionID, found, err := store.GetThreadSession("T111", "C1", "123.456")
+	if err != nil {
+		t.Fatalf("get thread session failed: %v", err)
+	}
+	if !found || sessionID != "session-1" {
+		t.Fatalf("unexpected thread session mapping: found=%v id=%q", found, sessionID)
+	}
+
+	select {
+	case msg := <-msgCh:
+		if !strings.Contains(msg["text"], "Completed on branch") {
+			t.Fatalf("unexpected completion message: %q", msg["text"])
+		}
+		if !strings.Contains(msg["text"], "https://github.com/acme/repo/pull/1") {
+			t.Fatalf("expected pr url in completion message: %q", msg["text"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for completion message")
+	}
+}
+
 func TestHandleEventsRejectsInvalidSignature(t *testing.T) {
 	store := newCloudStore(t)
 	defer func() { _ = store.Close() }()

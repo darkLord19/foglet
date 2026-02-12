@@ -36,9 +36,10 @@ type Config struct {
 	OAuthAccessURL string
 	APIBaseURL     string
 	StateTTL       time.Duration
+	PairingCodeTTL time.Duration
 }
 
-// Server provides multi-tenant Slack install/event handling.
+// Server provides multi-tenant Slack install/event handling and device routing APIs.
 type Server struct {
 	store      *Store
 	cfg        Config
@@ -79,6 +80,9 @@ func NewServer(store *Store, cfg Config) (*Server, error) {
 	if cfg.StateTTL <= 0 {
 		cfg.StateTTL = defaultStateTTL
 	}
+	if cfg.PairingCodeTTL <= 0 {
+		cfg.PairingCodeTTL = 10 * time.Minute
+	}
 
 	return &Server{
 		store:       store,
@@ -93,11 +97,14 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/slack/install", s.handleInstall)
 	mux.HandleFunc("/slack/oauth/callback", s.handleOAuthCallback)
 	mux.HandleFunc("/slack/events", s.handleEvents)
+	mux.HandleFunc("/v1/pair/claim", s.handlePairClaim)
+	mux.HandleFunc("/v1/pair/unpair", s.handlePairUnpair)
+	mux.HandleFunc("/v1/device/jobs/claim", s.handleDeviceClaimJob)
+	mux.HandleFunc("/v1/device/jobs/", s.handleDeviceJobDetail)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	writeJSON(w, http.StatusOK, map[string]string{
 		"status": "ok",
 		"time":   time.Now().UTC().Format(time.RFC3339),
 	})
@@ -155,7 +162,7 @@ func (s *Server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = w.Write([]byte("Fog Slack app installed successfully. Return to Fog desktop app to finish pairing."))
+	_, _ = w.Write([]byte("Fog Slack app installed successfully. Return to Fog device and finish pairing."))
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
@@ -182,8 +189,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 
 	switch envelope.Type {
 	case "url_verification":
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{
+		writeJSON(w, http.StatusOK, map[string]string{
 			"challenge": envelope.Challenge,
 		})
 		return
@@ -192,7 +198,6 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "team_id and event_id are required", http.StatusBadRequest)
 			return
 		}
-
 		isNew, err := s.store.RecordEventID(envelope.TeamID, envelope.EventID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -202,7 +207,6 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
-
 		if envelope.Event.Type == "app_mention" {
 			_ = s.handleAppMention(envelope.TeamID, envelope.Event)
 		}
@@ -218,16 +222,280 @@ func (s *Server) handleAppMention(teamID string, event slackInnerEvent) error {
 	if strings.TrimSpace(event.Channel) == "" || strings.TrimSpace(event.User) == "" {
 		return nil
 	}
+	if strings.TrimSpace(event.Subtype) != "" || strings.TrimSpace(event.BotID) != "" {
+		return nil
+	}
 
-	_, paired, err := s.store.GetPairing(teamID, event.User)
+	rootTS := strings.TrimSpace(event.ThreadTS)
+	if rootTS == "" {
+		rootTS = strings.TrimSpace(event.TS)
+	}
+	if rootTS == "" {
+		return nil
+	}
+
+	deviceID, paired, err := s.store.GetPairing(teamID, event.User)
 	if err != nil {
 		return err
 	}
 	if !paired {
-		return s.postEphemeral(teamID, event.Channel, event.User, "Fog is not paired for this workspace. Pair your device from Fog desktop app.")
+		req, reqErr := s.store.CreatePairingRequest(teamID, event.User, event.Channel, rootTS, s.cfg.PairingCodeTTL)
+		if reqErr != nil {
+			return reqErr
+		}
+		text := fmt.Sprintf(
+			"Fog is not paired yet.\nOpen your Fog device and pair with code `%s`.\nCode expires in %d minutes.",
+			req.Code,
+			int(s.cfg.PairingCodeTTL.Minutes()),
+		)
+		return s.postEphemeral(teamID, event.Channel, event.User, text)
 	}
 
-	return s.postEphemeral(teamID, event.Channel, event.User, "Pairing found. Device routing will start in the next slice.")
+	rawPrompt := stripMentions(event.Text)
+	isFollowUp := strings.TrimSpace(event.ThreadTS) != "" && strings.TrimSpace(event.ThreadTS) != strings.TrimSpace(event.TS)
+	job := Job{
+		DeviceID:    deviceID,
+		TeamID:      teamID,
+		ChannelID:   event.Channel,
+		RootTS:      rootTS,
+		SlackUserID: event.User,
+	}
+
+	if isFollowUp {
+		prompt, parseErr := normalizeFollowUpPrompt(rawPrompt)
+		if parseErr != nil {
+			_ = s.postMessage(teamID, event.Channel, rootTS, "❌ "+parseErr.Error())
+			return nil
+		}
+		sessionID, found, getErr := s.store.GetThreadSession(teamID, event.Channel, rootTS)
+		if getErr != nil {
+			return getErr
+		}
+		if !found {
+			_ = s.postMessage(teamID, event.Channel, rootTS, "❌ No active Fog session found for this thread. Start with an initial command.")
+			return nil
+		}
+		job.Kind = jobKindFollowUp
+		job.SessionID = sessionID
+		job.Prompt = prompt
+	} else {
+		parsed, parseErr := parseCommandText(rawPrompt)
+		if parseErr != nil {
+			_ = s.postMessage(teamID, event.Channel, rootTS, "❌ "+parseErr.Error())
+			return nil
+		}
+		job.Kind = jobKindStartSession
+		job.Repo = parsed.Repo
+		job.Tool = parsed.Tool
+		job.Model = parsed.Model
+		job.AutoPR = parsed.AutoPR
+		job.BranchName = parsed.BranchName
+		job.CommitMsg = parsed.CommitMsg
+		job.Prompt = parsed.Prompt
+	}
+
+	enqueued, err := s.store.EnqueueJob(job)
+	if err != nil {
+		return err
+	}
+	text := fmt.Sprintf("🚀 Queued on your paired Fog device (job `%s`).", enqueued.ID)
+	return s.postMessage(teamID, event.Channel, rootTS, text)
+}
+
+func (s *Server) handlePairClaim(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Code        string `json:"code"`
+		DeviceID    string `json:"device_id"`
+		DeviceToken string `json:"device_token,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	result, err := s.store.ClaimPairingRequest(req.Code, req.DeviceID, req.DeviceToken)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"team_id":       result.TeamID,
+		"slack_user_id": result.SlackUserID,
+		"device_id":     result.DeviceID,
+		"device_token":  result.DeviceToken,
+	})
+}
+
+func (s *Server) handlePairUnpair(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	deviceID, token, err := deviceAuthFromRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	if err := s.store.AuthenticateDevice(deviceID, token); err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		TeamID      string `json:"team_id"`
+		SlackUserID string `json:"slack_user_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if err := s.store.UnpairStrict(req.TeamID, req.SlackUserID, deviceID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleDeviceClaimJob(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	deviceID, token, err := deviceAuthFromRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	if err := s.store.AuthenticateDevice(deviceID, token); err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	job, found, err := s.store.ClaimNextJob(deviceID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
+func (s *Server) handleDeviceJobDetail(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v1/device/jobs/")
+	path = strings.Trim(path, "/")
+	if path == "" {
+		http.NotFound(w, r)
+		return
+	}
+	parts := strings.Split(path, "/")
+	if len(parts) != 2 || parts[1] != "complete" || r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	jobID := strings.TrimSpace(parts[0])
+	if jobID == "" {
+		http.Error(w, "job_id is required", http.StatusBadRequest)
+		return
+	}
+
+	deviceID, token, err := deviceAuthFromRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	if err := s.store.AuthenticateDevice(deviceID, token); err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		Success   bool   `json:"success"`
+		Error     string `json:"error,omitempty"`
+		SessionID string `json:"session_id,omitempty"`
+		RunID     string `json:"run_id,omitempty"`
+		Branch    string `json:"branch,omitempty"`
+		PRURL     string `json:"pr_url,omitempty"`
+		CommitSHA string `json:"commit_sha,omitempty"`
+		CommitMsg string `json:"commit_msg,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+
+	job, err := s.store.CompleteJob(JobCompletion{
+		JobID:     jobID,
+		DeviceID:  deviceID,
+		Success:   req.Success,
+		Error:     req.Error,
+		SessionID: req.SessionID,
+		RunID:     req.RunID,
+		Branch:    req.Branch,
+		PRURL:     req.PRURL,
+		CommitSHA: req.CommitSHA,
+		CommitMsg: req.CommitMsg,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if req.Success && strings.TrimSpace(job.Kind) == jobKindStartSession && strings.TrimSpace(job.SessionID) != "" {
+		_ = s.store.UpsertThreadSession(job.TeamID, job.ChannelID, job.RootTS, job.SessionID)
+	}
+
+	if req.Success {
+		text := fmt.Sprintf("✅ Completed on branch `%s`.", fallback(job.Branch, job.BranchName))
+		if strings.TrimSpace(job.PRURL) != "" {
+			text += "\nPR: " + job.PRURL
+		}
+		_ = s.postMessage(job.TeamID, job.ChannelID, job.RootTS, text)
+	} else {
+		errText := fallback(job.Error, req.Error)
+		_ = s.postMessage(job.TeamID, job.ChannelID, job.RootTS, "❌ Task failed: "+fallback(errText, "unknown error"))
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status": "ok",
+		"job_id": job.ID,
+	})
+}
+
+func deviceAuthFromRequest(r *http.Request) (string, string, error) {
+	deviceID := strings.TrimSpace(r.Header.Get("X-Fog-Device-ID"))
+	if deviceID == "" {
+		return "", "", errors.New("missing X-Fog-Device-ID header")
+	}
+	auth := strings.TrimSpace(r.Header.Get("Authorization"))
+	if !strings.HasPrefix(strings.ToLower(auth), "bearer ") {
+		return "", "", errors.New("missing bearer token")
+	}
+	token := strings.TrimSpace(auth[len("Bearer "):])
+	if token == "" {
+		return "", "", errors.New("missing bearer token")
+	}
+	return deviceID, token, nil
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func fallback(v, alt string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return strings.TrimSpace(alt)
+	}
+	return v
 }
 
 func (s *Server) postEphemeral(teamID, channelID, userID, text string) error {
@@ -269,6 +537,53 @@ func (s *Server) postEphemeral(teamID, channelID, userID, text string) error {
 	}
 	if !out.OK {
 		return fmt.Errorf("chat.postEphemeral failed: %s", out.Error)
+	}
+	return nil
+}
+
+func (s *Server) postMessage(teamID, channelID, threadTS, text string) error {
+	inst, found, err := s.store.GetInstallation(teamID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("installation not found for team %s", teamID)
+	}
+
+	payload := map[string]string{
+		"channel": channelID,
+		"text":    text,
+	}
+	if strings.TrimSpace(threadTS) != "" {
+		payload["thread_ts"] = threadTS
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPost, strings.TrimRight(s.cfg.APIBaseURL, "/")+"/chat.postMessage", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+inst.BotToken)
+	req.Header.Set("User-Agent", "fogcloud")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	var out struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return err
+	}
+	if !out.OK {
+		return fmt.Errorf("chat.postMessage failed: %s", out.Error)
 	}
 	return nil
 }
@@ -384,9 +699,12 @@ type slackEventsEnvelope struct {
 }
 
 type slackInnerEvent struct {
-	Type    string `json:"type"`
-	User    string `json:"user"`
-	Channel string `json:"channel"`
-	Text    string `json:"text"`
-	TS      string `json:"ts"`
+	Type     string `json:"type"`
+	User     string `json:"user"`
+	Channel  string `json:"channel"`
+	Text     string `json:"text"`
+	TS       string `json:"ts"`
+	ThreadTS string `json:"thread_ts"`
+	BotID    string `json:"bot_id"`
+	Subtype  string `json:"subtype"`
 }

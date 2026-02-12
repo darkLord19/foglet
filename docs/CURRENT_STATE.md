@@ -71,16 +71,26 @@ This document reflects the currently implemented product surface in this reposit
   - `/slack/install`
   - `/slack/oauth/callback`
   - `/slack/events`
+- Device routing APIs are implemented:
+  - `POST /v1/pair/claim`
+  - `POST /v1/pair/unpair`
+  - `POST /v1/device/jobs/claim`
+  - `POST /v1/device/jobs/{id}/complete`
 - Multi-workspace install persistence:
   - one installation row per Slack workspace (`team_id`)
   - bot token encrypted at rest with local AES-GCM key file
 - Pairing and routing metadata persistence primitives:
   - `(team_id, slack_user_id) -> device_id` pairings
+  - one-time pairing requests (`code`)
+  - per-device auth tokens (hashed at rest)
+  - queued jobs per device
   - per-thread session mapping (`team/channel/root_ts -> session_id`)
   - Slack event id dedupe storage
 - Current app mention behavior:
-  - unpaired user => ephemeral "not paired" response
-  - paired user => placeholder ephemeral response (routing execution in next slices)
+  - unpaired user => ephemeral pairing code response
+  - paired user => parse/validate command and enqueue a job
+  - follow-up thread mention => requires existing thread session mapping
+  - device completion endpoint writes thread session mapping for initial runs and posts completion in Slack
 
 ## Slack command contract
 
