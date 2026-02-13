@@ -197,6 +197,9 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 type SettingsResponse struct {
 	DefaultTool        string   `json:"default_tool,omitempty"`
+	DefaultModel       string   `json:"default_model,omitempty"`
+	DefaultAutoPR      bool     `json:"default_autopr"`
+	DefaultNotify      bool     `json:"default_notify"`
 	BranchPrefix       string   `json:"branch_prefix,omitempty"`
 	HasGitHubToken     bool     `json:"has_github_token"`
 	OnboardingRequired bool     `json:"onboarding_required"`
@@ -204,9 +207,12 @@ type SettingsResponse struct {
 }
 
 type UpdateSettingsRequest struct {
-	DefaultTool  *string `json:"default_tool"`
-	BranchPrefix *string `json:"branch_prefix"`
-	GitHubPAT    *string `json:"github_pat"`
+	DefaultTool   *string `json:"default_tool"`
+	DefaultModel  *string `json:"default_model"`
+	DefaultAutoPR *bool   `json:"default_autopr"`
+	DefaultNotify *bool   `json:"default_notify"`
+	BranchPrefix  *string `json:"branch_prefix"`
+	GitHubPAT     *string `json:"github_pat"`
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
@@ -227,6 +233,15 @@ func (s *Server) getSettings(w http.ResponseWriter) {
 
 	if tool, found, err := s.stateStore.GetDefaultTool(); err == nil && found {
 		resp.DefaultTool = tool
+	}
+	if model, found, err := s.stateStore.GetSetting("default_model"); err == nil && found {
+		resp.DefaultModel = model
+	}
+	if autopr, found, err := s.stateStore.GetSetting("default_autopr"); err == nil && found {
+		resp.DefaultAutoPR = autopr == "true"
+	}
+	if notify, found, err := s.stateStore.GetSetting("default_notify"); err == nil && found {
+		resp.DefaultNotify = notify == "true"
 	}
 	if prefix, found, err := s.stateStore.GetSetting("branch_prefix"); err == nil && found {
 		resp.BranchPrefix = prefix
@@ -258,6 +273,35 @@ func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.stateStore.SetDefaultTool(tool); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if req.DefaultModel != nil {
+		if err := s.stateStore.SetSetting("default_model", strings.TrimSpace(*req.DefaultModel)); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if req.DefaultAutoPR != nil {
+		val := "false"
+		if *req.DefaultAutoPR {
+			val = "true"
+		}
+		if err := s.stateStore.SetSetting("default_autopr", val); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if req.DefaultNotify != nil {
+		val := "false"
+		if *req.DefaultNotify {
+			val = "true"
+		}
+		if err := s.stateStore.SetSetting("default_notify", val); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
