@@ -309,18 +309,57 @@ func isToolAvailable(name string) bool {
 	return tool.IsAvailable()
 }
 
-// WithCORS adds permissive CORS headers for local desktop/web clients.
+// allowedCORSOrigin returns the origin if it matches the local desktop allowlist,
+// or empty string if the origin is not permitted.
+func allowedCORSOrigin(origin string) string {
+	origin = strings.TrimSpace(origin)
+	if origin == "" {
+		return ""
+	}
+	lower := strings.ToLower(origin)
+	switch {
+	case lower == "wails://wails",
+		lower == "http://wails.localhost",
+		strings.HasPrefix(lower, "http://wails.localhost:"),
+		strings.HasPrefix(lower, "http://localhost:"),
+		strings.HasPrefix(lower, "http://127.0.0.1:"),
+		lower == "http://localhost",
+		lower == "http://127.0.0.1":
+		return origin
+	default:
+		return ""
+	}
+}
+
+// WithCORS adds CORS headers restricted to local desktop/web clients.
 func WithCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		origin := r.Header.Get("Origin")
+		allowed := allowedCORSOrigin(origin)
+		if allowed != "" {
+			w.Header().Set("Access-Control-Allow-Origin", allowed)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Vary", "Origin")
+		}
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 
+		next.ServeHTTP(w, r)
+	})
+}
+
+const defaultMaxBodyBytes int64 = 1 << 20 // 1 MB
+
+// WithBodyLimit restricts request body size for non-GET requests.
+func WithBodyLimit(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodOptions && r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, defaultMaxBodyBytes)
+		}
 		next.ServeHTTP(w, r)
 	})
 }

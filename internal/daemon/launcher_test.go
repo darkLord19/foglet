@@ -60,7 +60,7 @@ func TestEnsureRunningStartsEmbeddedDaemon(t *testing.T) {
 	port := ln.Addr().(*net.TCPAddr).Port
 	_ = ln.Close()
 
-	baseURL, err := EnsureRunning(t.TempDir(), port, 5*time.Second)
+	baseURL, _, err := EnsureRunning(t.TempDir(), port, 5*time.Second)
 	if err != nil {
 		t.Fatalf("ensure running failed: %v", err)
 	}

@@ -102,6 +102,16 @@ func runDaemon() error {
 	}
 	defer func() { _ = stateStore.Close() }()
 
+	// Generate API token for local auth
+	apiToken, err := api.GenerateAPIToken()
+	if err != nil {
+		return err
+	}
+	if err := api.WriteTokenFile(configDir, apiToken); err != nil {
+		return err
+	}
+	log.Printf("API token written to %s/api.token\n", configDir)
+
 	// Create mux
 	mux := http.NewServeMux()
 
@@ -205,7 +215,7 @@ func runDaemon() error {
 	log.Printf("API: http://localhost:%d/api/\n", flagPort)
 	log.Printf("Health: http://localhost:%d/health\n", flagPort)
 
-	return http.ListenAndServe(addr, api.WithCORS(mux))
+	return http.ListenAndServe(addr, api.WithCORS(api.WithBodyLimit(api.WithAuth(apiToken, mux))))
 }
 
 func validateSlackConfig(mode, botToken, appToken string) error {

@@ -29,7 +29,8 @@ var (
 )
 
 // EnsureRunning checks /health and starts fogd if needed.
-func EnsureRunning(fogHome string, port int, timeout time.Duration) (string, error) {
+// Returns the base URL and the API bearer token.
+func EnsureRunning(fogHome string, port int, timeout time.Duration) (string, string, error) {
 	if timeout <= 0 {
 		timeout = defaultHealthTimeout
 	}
@@ -37,19 +38,24 @@ func EnsureRunning(fogHome string, port int, timeout time.Duration) (string, err
 	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 	healthURL := baseURL + "/health"
 
+	// Read existing token if daemon is already running.
+	existingToken, _ := api.ReadTokenFile(fogHome)
+
 	if isHealthy(healthURL, 2*time.Second) {
-		return baseURL, nil
+		return baseURL, existingToken, nil
 	}
 
 	if err := startFogd(fogHome, port); err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	if err := waitForHealth(healthURL, timeout); err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return baseURL, nil
+	// Re-read token that was generated during startFogd.
+	token, _ := api.ReadTokenFile(fogHome)
+	return baseURL, token, nil
 }
 
 func startFogd(fogHome string, port int) error {
@@ -82,9 +88,20 @@ func startFogd(fogHome string, port int) error {
 	mux := http.NewServeMux()
 	api.New(r, stateStore, port).RegisterRoutes(mux)
 
+	// Generate API token for local auth.
+	apiToken, err := api.GenerateAPIToken()
+	if err != nil {
+		_ = stateStore.Close()
+		return fmt.Errorf("generate api token: %w", err)
+	}
+	if err := api.WriteTokenFile(fogHome, apiToken); err != nil {
+		_ = stateStore.Close()
+		return fmt.Errorf("write api token: %w", err)
+	}
+
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(port),
-		Handler: api.WithCORS(mux),
+		Handler: api.WithCORS(api.WithBodyLimit(api.WithAuth(apiToken, mux))),
 	}
 	ln, err := net.Listen("tcp", server.Addr)
 	if err != nil {

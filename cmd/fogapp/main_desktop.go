@@ -30,23 +30,26 @@ func main() {
 
 func runDesktop() error {
 	baseURL := "http://127.0.0.1:8080"
+	apiToken := ""
 	if !isBindingsBuild {
 		fogHome, err := env.FogHome()
 		if err != nil {
 			return err
 		}
 		const port = 8080
-		baseURL, err = daemon.EnsureRunning(fogHome, port, 20*time.Second)
+		var tokenStr string
+		baseURL, tokenStr, err = daemon.EnsureRunning(fogHome, port, 20*time.Second)
 		if err != nil {
 			return fmt.Errorf("ensure fogd running: %w", err)
 		}
+		apiToken = tokenStr
 	}
 	frontendFS, err := fs.Sub(assets, "frontend")
 	if err != nil {
 		return fmt.Errorf("load desktop assets: %w", err)
 	}
 
-	app := newDesktopApp(baseURL, version)
+	app := newDesktopApp(baseURL, version, apiToken)
 	return wails.Run(&options.App{
 		Title:             "Fog Desktop",
 		Width:             1460,
@@ -71,12 +74,14 @@ type desktopApp struct {
 	ctx        context.Context
 	apiBaseURL string
 	version    string
+	apiToken   string
 }
 
-func newDesktopApp(apiBaseURL, version string) *desktopApp {
+func newDesktopApp(apiBaseURL, version, apiToken string) *desktopApp {
 	return &desktopApp{
 		apiBaseURL: apiBaseURL,
 		version:    version,
+		apiToken:   apiToken,
 	}
 }
 
@@ -90,6 +95,10 @@ func (a *desktopApp) APIBaseURL() string {
 
 func (a *desktopApp) Version() string {
 	return a.version
+}
+
+func (a *desktopApp) APIToken() string {
+	return a.apiToken
 }
 
 func (a *desktopApp) OpenExternal(rawURL string) {

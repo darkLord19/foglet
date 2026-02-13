@@ -10,6 +10,7 @@
 
   var state = {
     apiBaseURL: "http://127.0.0.1:8080",
+    apiToken: "",
     settings: null,
     repos: [],
     sessions: [],
@@ -104,7 +105,7 @@
         var base = await app.APIBaseURL();
         if (base) return String(base);
       }
-    } catch (_) {}
+    } catch (_) { }
     return state.apiBaseURL;
   }
 
@@ -115,13 +116,29 @@
         var v = await app.Version();
         if (v) return String(v);
       }
-    } catch (_) {}
+    } catch (_) { }
     return "-";
+  }
+
+  async function resolveAPIToken() {
+    try {
+      var app = window.go && window.go.main && window.go.main.desktopApp;
+      if (app && typeof app.APIToken === "function") {
+        var t = await app.APIToken();
+        if (t) return String(t);
+      }
+    } catch (_) { }
+    return "";
   }
 
   async function fetchJSON(path, options) {
     var url = state.apiBaseURL + path;
-    var res = await fetch(url, options || {});
+    var opts = options || {};
+    if (!opts.headers) opts.headers = {};
+    if (state.apiToken) {
+      opts.headers["Authorization"] = "Bearer " + state.apiToken;
+    }
+    var res = await fetch(url, opts);
     if (!res.ok) {
       var text = await res.text();
       throw new Error(text || ("HTTP " + res.status));
@@ -181,7 +198,7 @@
       return "<div>" +
         "<strong>" + escapeHTML(repo.name) + "</strong>" +
         "<div class='repo-meta'>" + escapeHTML(repo.base_worktree_path || "-") + "</div>" +
-      "</div>";
+        "</div>";
     }).join("");
   }
 
@@ -196,7 +213,7 @@
         "<input type='checkbox' id='repo-" + idx + "' data-repo='" + escapeHTML(repo.full_name) + "'>" +
         "<span>" + escapeHTML(repo.full_name) + "</span>" +
         "<span class='repo-meta'>" + escapeHTML(repo.default_branch || "-") + "</span>" +
-      "</label>";
+        "</label>";
     }).join("");
   }
 
@@ -223,10 +240,10 @@
         return "<article class='session-item" + activeClass + "' data-session-id='" + escapeHTML(session.id) + "'>" +
           "<div class='session-title'>" + escapeHTML(title) + "</div>" +
           "<div class='session-meta'>" +
-            "<span>" + escapeHTML(session.tool || "-") + "</span>" +
-            "<span>" + escapeHTML(status + (session.busy ? "*" : "")) + "</span>" +
+          "<span>" + escapeHTML(session.tool || "-") + "</span>" +
+          "<span>" + escapeHTML(status + (session.busy ? "*" : "")) + "</span>" +
           "</div>" +
-        "</article>";
+          "</article>";
       }).join("");
 
       Array.prototype.slice.call(root.querySelectorAll(".session-item[data-session-id]")).forEach(function (node) {
@@ -293,7 +310,7 @@
         "<span>" + escapeHTML(run.state || "-") + "</span>" +
         "<div class='repo-meta'>" + escapeHTML(formatDate(run.updated_at || run.created_at)) + "</div>" +
         "<div>" + escapeHTML(firstPromptLine(run.prompt)) + "</div>" +
-      "</article>";
+        "</article>";
     }).join("") : "No runs yet.") + "</div>";
 
     var eventsHTML = "<div class='timeline-list'>" + (events.length ? events.map(function (ev) {
@@ -301,7 +318,7 @@
         "<strong>" + escapeHTML(ev.type || "event") + "</strong>" +
         "<span>" + escapeHTML(formatDate(ev.ts)) + "</span>" +
         "<div>" + escapeHTML(ev.message || ev.data || "-") + "</div>" +
-      "</article>";
+        "</article>";
     }).join("") : "No events for selected run.") + "</div>";
 
     $("tab-timeline").innerHTML =
@@ -351,11 +368,11 @@
     var canceled = runs.filter(function (r) { return r.state === "CANCELLED"; }).length;
     $("tab-stats").innerHTML =
       "<div class='timeline-list'>" +
-        "<article class='timeline-item'><strong>Total runs</strong> " + runs.length + "</article>" +
-        "<article class='timeline-item'><strong>Completed</strong> " + completed + "</article>" +
-        "<article class='timeline-item'><strong>Failed</strong> " + failed + "</article>" +
-        "<article class='timeline-item'><strong>Cancelled</strong> " + canceled + "</article>" +
-        "<article class='timeline-item'><strong>Latest commit</strong> " + escapeHTML((latest && latest.commit_sha) || "-") + "</article>" +
+      "<article class='timeline-item'><strong>Total runs</strong> " + runs.length + "</article>" +
+      "<article class='timeline-item'><strong>Completed</strong> " + completed + "</article>" +
+      "<article class='timeline-item'><strong>Failed</strong> " + failed + "</article>" +
+      "<article class='timeline-item'><strong>Cancelled</strong> " + canceled + "</article>" +
+      "<article class='timeline-item'><strong>Latest commit</strong> " + escapeHTML((latest && latest.commit_sha) || "-") + "</article>" +
       "</div>";
   }
 
@@ -756,6 +773,7 @@
   async function bootstrap() {
     $("daemon-badge").textContent = "fogd: connecting";
     state.apiBaseURL = await resolveAPIBaseURL();
+    state.apiToken = await resolveAPIToken();
     var version = await resolveVersion();
     $("version-badge").textContent = "version: " + version;
 
@@ -850,12 +868,12 @@
         var payload = JSON.parse(ev.data);
         appendRunEvent(payload);
         renderDetail();
-      } catch (_) {}
+      } catch (_) { }
     });
 
     source.addEventListener("done", function () {
       closeRunStream();
-      refreshSessions().catch(function () {});
+      refreshSessions().catch(function () { });
     });
 
     source.onerror = function () {
