@@ -317,6 +317,10 @@ func (r *Runner) prepareForkSession(sourceSessionID string, opts ForkSessionOpti
 	if sourceSession.Busy {
 		return StartSessionOptions{}, state.Session{}, fmt.Errorf("session %q is busy", sourceSessionID)
 	}
+	sourceWorktreePath := strings.TrimSpace(sourceSession.WorktreePath)
+	if sourceWorktreePath == "" {
+		return StartSessionOptions{}, state.Session{}, fmt.Errorf("session %q has no worktree path", sourceSessionID)
+	}
 
 	repo, found, err := r.state.GetRepoByName(sourceSession.RepoName)
 	if err != nil {
@@ -365,7 +369,7 @@ func (r *Runner) prepareForkSession(sourceSessionID string, opts ForkSessionOpti
 
 	return StartSessionOptions{
 		RepoName:    sourceSession.RepoName,
-		RepoPath:    repo.BaseWorktreePath,
+		RepoPath:    sourceWorktreePath,
 		Branch:      opts.Branch,
 		Tool:        tool,
 		Model:       model,
