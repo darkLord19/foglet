@@ -1,9 +1,11 @@
 package ai
 
 import (
-	"bytes"
+	"context"
 	"fmt"
-	"os/exec"
+	"strings"
+
+	"github.com/darkLord19/foglet/internal/proc"
 )
 
 // ClaudeCode represents the Claude Code AI tool
@@ -17,7 +19,7 @@ func (c *ClaudeCode) IsAvailable() bool {
 	return commandExists("claude") || commandExists("claude-code")
 }
 
-func (c *ClaudeCode) Execute(workdir, prompt string) (*Result, error) {
+func (c *ClaudeCode) Execute(ctx context.Context, workdir, prompt string) (*Result, error) {
 	if !c.IsAvailable() {
 		return nil, fmt.Errorf("claude not available")
 	}
@@ -29,23 +31,16 @@ func (c *ClaudeCode) Execute(workdir, prompt string) (*Result, error) {
 
 	// Claude Code supports CLI execution with the 'chat' command
 	// Example: claude chat "implement feature X"
-	cmd := exec.Command(cmdName, "chat", prompt)
-	cmd.Dir = workdir
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
+	output, err := proc.Run(ctx, workdir, cmdName, "chat", prompt)
+	trimmed := strings.TrimSpace(string(output))
 
 	result := &Result{
 		Success: err == nil,
-		Output:  stdout.String(),
+		Output:  trimmed,
 	}
 
 	if err != nil {
 		result.Error = err
-		result.Output += "\nError: " + stderr.String()
 	}
 
 	return result, err

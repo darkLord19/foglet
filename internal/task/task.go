@@ -18,6 +18,7 @@ const (
 	StatePRCreated  State = "PR_CREATED"
 	StateCompleted  State = "COMPLETED"
 	StateFailed     State = "FAILED"
+	StateCancelled  State = "CANCELLED"
 )
 
 // Task represents an AI coding task
@@ -61,13 +62,14 @@ type StateTransition struct {
 func (s State) CanTransitionTo(next State) bool {
 	validTransitions := map[State][]State{
 		StateCreated:    {StateSetup, StateFailed},
-		StateSetup:      {StateAIRunning, StateFailed},
-		StateAIRunning:  {StateValidating, StateCommitted, StateFailed},
-		StateValidating: {StateCommitted, StateFailed},
-		StateCommitted:  {StatePRCreated, StateCompleted, StateFailed},
-		StatePRCreated:  {StateCompleted, StateFailed},
+		StateSetup:      {StateAIRunning, StateFailed, StateCancelled},
+		StateAIRunning:  {StateValidating, StateCommitted, StateFailed, StateCancelled},
+		StateValidating: {StateCommitted, StateFailed, StateCancelled},
+		StateCommitted:  {StatePRCreated, StateCompleted, StateFailed, StateCancelled},
+		StatePRCreated:  {StateCompleted, StateFailed, StateCancelled},
 		StateCompleted:  {},
 		StateFailed:     {},
+		StateCancelled:  {},
 	}
 
 	allowed, ok := validTransitions[s]
@@ -93,7 +95,7 @@ func (t *Task) TransitionTo(newState State) error {
 	t.State = newState
 	t.UpdatedAt = time.Now()
 
-	if newState == StateCompleted || newState == StateFailed {
+	if newState == StateCompleted || newState == StateFailed || newState == StateCancelled {
 		now := time.Now()
 		t.CompletedAt = &now
 	}
@@ -126,7 +128,7 @@ func FromJSON(data []byte) (*Task, error) {
 
 // IsTerminal returns true if the task is in a terminal state
 func (t *Task) IsTerminal() bool {
-	return t.State == StateCompleted || t.State == StateFailed
+	return t.State == StateCompleted || t.State == StateFailed || t.State == StateCancelled
 }
 
 // Duration returns the task execution duration

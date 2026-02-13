@@ -1,9 +1,11 @@
 package ai
 
 import (
+	"context"
 	"fmt"
-	"os/exec"
 	"strings"
+
+	"github.com/darkLord19/foglet/internal/proc"
 )
 
 // Cursor represents the Cursor AI tool.
@@ -17,13 +19,13 @@ func (c *Cursor) IsAvailable() bool {
 	return cursorAgentCommand() != ""
 }
 
-func (c *Cursor) Execute(workdir, prompt string) (*Result, error) {
+func (c *Cursor) Execute(ctx context.Context, workdir, prompt string) (*Result, error) {
 	cmdName := cursorAgentCommand()
 	if cmdName == "" {
 		return nil, fmt.Errorf("cursor-agent not available")
 	}
 
-	output, err := runCursorHeadless(cmdName, workdir, prompt)
+	output, err := runCursorHeadless(ctx, cmdName, workdir, prompt)
 	if err != nil {
 		return &Result{
 			Success: false,
@@ -45,9 +47,9 @@ func cursorAgentCommand() string {
 	return ""
 }
 
-func runCursorHeadless(cmdName, workdir, prompt string) ([]byte, error) {
+func runCursorHeadless(ctx context.Context, cmdName, workdir, prompt string) ([]byte, error) {
 	primary := buildCursorHeadlessArgs(prompt, true)
-	output, err := runCursorCommand(cmdName, workdir, primary)
+	output, err := runCursorCommand(ctx, cmdName, workdir, primary)
 	if err == nil {
 		return output, nil
 	}
@@ -55,16 +57,14 @@ func runCursorHeadless(cmdName, workdir, prompt string) ([]byte, error) {
 	combined := string(output)
 	if strings.Contains(combined, "unknown flag") || strings.Contains(combined, "flag provided but not defined") {
 		fallback := buildCursorHeadlessArgs(prompt, false)
-		return runCursorCommand(cmdName, workdir, fallback)
+		return runCursorCommand(ctx, cmdName, workdir, fallback)
 	}
 
 	return output, err
 }
 
-func runCursorCommand(cmdName, workdir string, args []string) ([]byte, error) {
-	cmd := exec.Command(cmdName, args...)
-	cmd.Dir = workdir
-	return cmd.CombinedOutput()
+func runCursorCommand(ctx context.Context, cmdName, workdir string, args []string) ([]byte, error) {
+	return proc.Run(ctx, workdir, cmdName, args...)
 }
 
 func buildCursorHeadlessArgs(prompt string, withOutputFormat bool) []string {

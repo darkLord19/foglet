@@ -120,3 +120,85 @@ func TestFallbackCommitMessage(t *testing.T) {
 		t.Fatalf("expected footer in fallback commit message: %q", got)
 	}
 }
+
+func TestRunWorktreeName(t *testing.T) {
+	got := runWorktreeName("team/add otp!!", "1234567890abcdef")
+	if !strings.HasPrefix(got, "team-add-otp-12345678") {
+		t.Fatalf("unexpected worktree name: %q", got)
+	}
+	if strings.Contains(got, "/") || strings.Contains(got, " ") {
+		t.Fatalf("worktree name should be sanitized: %q", got)
+	}
+}
+
+func TestCancelSessionLatestRunCancelsActiveLatestRun(t *testing.T) {
+	r, err := New(t.TempDir(), t.TempDir())
+	if err != nil {
+		t.Fatalf("new runner failed: %v", err)
+	}
+	st, err := state.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("new state store failed: %v", err)
+	}
+	defer func() { _ = st.Close() }()
+	r.SetStateStore(st)
+
+	if _, err := st.UpsertRepo(state.Repo{
+		Name:             "acme/api",
+		URL:              "https://github.com/acme/api.git",
+		Host:             "github.com",
+		Owner:            "acme",
+		Repo:             "api",
+		BarePath:         "/tmp/acme-api/repo.git",
+		BaseWorktreePath: "/tmp/acme-api/base",
+		DefaultBranch:    "main",
+	}); err != nil {
+		t.Fatalf("upsert repo failed: %v", err)
+	}
+
+	now := time.Now().UTC()
+	if err := st.CreateSession(state.Session{
+		ID:           "session-1",
+		RepoName:     "acme/api",
+		Branch:       "fog/test",
+		WorktreePath: "/tmp/worktree",
+		Tool:         "claude",
+		Status:       "AI_RUNNING",
+		Busy:         true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}); err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+	if err := st.CreateRun(state.Run{
+		ID:           "run-1",
+		SessionID:    "session-1",
+		Prompt:       "do work",
+		WorktreePath: "/tmp/worktree",
+		State:        "AI_RUNNING",
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}); err != nil {
+		t.Fatalf("create run failed: %v", err)
+	}
+
+	called := false
+	r.active["session-1"] = &activeRun{
+		sessionID: "session-1",
+		runID:     "run-1",
+		cancel: func() {
+			called = true
+		},
+	}
+
+	run, err := r.CancelSessionLatestRun("session-1")
+	if err != nil {
+		t.Fatalf("cancel session failed: %v", err)
+	}
+	if run.ID != "run-1" {
+		t.Fatalf("unexpected run id: %q", run.ID)
+	}
+	if !called {
+		t.Fatal("expected cancel function to be called")
+	}
+}

@@ -60,6 +60,45 @@ func TestHandleSessionDetailNotFound(t *testing.T) {
 	}
 }
 
+func TestHandleSessionCancelRoute(t *testing.T) {
+	srv := newTestServer(t)
+	seedSessionFixture(t, srv)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/sessions/session-1/cancel", nil)
+	w := httptest.NewRecorder()
+
+	srv.handleSessionDetail(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("unexpected status: got %d want %d body=%s", w.Code, http.StatusBadRequest, w.Body.String())
+	}
+}
+
+func TestHandleSessionDiffRoute(t *testing.T) {
+	srv := newTestServer(t)
+	seedSessionFixture(t, srv)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/sessions/session-1/diff", nil)
+	w := httptest.NewRecorder()
+
+	srv.handleSessionDetail(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("unexpected status: got %d want %d body=%s", w.Code, http.StatusBadRequest, w.Body.String())
+	}
+}
+
+func TestHandleSessionOpenRoute(t *testing.T) {
+	srv := newTestServer(t)
+	seedSessionFixture(t, srv)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/sessions/session-1/open", nil)
+	w := httptest.NewRecorder()
+
+	srv.handleSessionDetail(w, req)
+	if w.Code != http.StatusOK && w.Code != http.StatusBadRequest {
+		t.Fatalf("unexpected status: got %d want %d or %d body=%s", w.Code, http.StatusOK, http.StatusBadRequest, w.Body.String())
+	}
+}
+
 func TestHandleCreateFollowUpRunRequiresPrompt(t *testing.T) {
 	srv := newTestServer(t)
 	req := httptest.NewRequest(http.MethodPost, "/api/sessions/abc/runs", bytes.NewBufferString(`{}`))
@@ -130,12 +169,13 @@ func seedSessionFixture(t *testing.T, srv *Server) {
 	}
 
 	if err := srv.stateStore.CreateRun(state.Run{
-		ID:        "run-1",
-		SessionID: "session-1",
-		Prompt:    "add otp login",
-		State:     "CREATED",
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:           "run-1",
+		SessionID:    "session-1",
+		Prompt:       "add otp login",
+		WorktreePath: "/tmp/acme-api/worktree-run-1",
+		State:        "CREATED",
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}); err != nil {
 		t.Fatalf("create run failed: %v", err)
 	}

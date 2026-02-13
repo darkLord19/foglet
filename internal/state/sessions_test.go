@@ -76,22 +76,24 @@ func TestSessionAndRunLifecycle(t *testing.T) {
 	r1Created := time.Now().Add(-1 * time.Minute).UTC()
 	r2Created := time.Now().UTC()
 	if err := store.CreateRun(Run{
-		ID:        "run-1",
-		SessionID: "sess-1",
-		Prompt:    "Add OTP login",
-		State:     "CREATED",
-		CreatedAt: r1Created,
-		UpdatedAt: r1Created,
+		ID:           "run-1",
+		SessionID:    "sess-1",
+		Prompt:       "Add OTP login",
+		WorktreePath: "/tmp/acme-api/branches/fog-add-login-run-1",
+		State:        "CREATED",
+		CreatedAt:    r1Created,
+		UpdatedAt:    r1Created,
 	}); err != nil {
 		t.Fatalf("create run-1 failed: %v", err)
 	}
 	if err := store.CreateRun(Run{
-		ID:        "run-2",
-		SessionID: "sess-1",
-		Prompt:    "Add tests",
-		State:     "CREATED",
-		CreatedAt: r2Created,
-		UpdatedAt: r2Created,
+		ID:           "run-2",
+		SessionID:    "sess-1",
+		Prompt:       "Add tests",
+		WorktreePath: "/tmp/acme-api/branches/fog-add-login-run-2",
+		State:        "CREATED",
+		CreatedAt:    r2Created,
+		UpdatedAt:    r2Created,
 	}); err != nil {
 		t.Fatalf("create run-2 failed: %v", err)
 	}
@@ -105,6 +107,16 @@ func TestSessionAndRunLifecycle(t *testing.T) {
 	}
 	if runs[0].ID != "run-2" {
 		t.Fatalf("expected newest run first, got %+v", runs)
+	}
+	if got, want := runs[0].WorktreePath, "/tmp/acme-api/branches/fog-add-login-run-2"; got != want {
+		t.Fatalf("unexpected run worktree path: got %q want %q", got, want)
+	}
+	latest, found, err := store.GetLatestRun("sess-1")
+	if err != nil {
+		t.Fatalf("get latest run failed: %v", err)
+	}
+	if !found || latest.ID != "run-2" {
+		t.Fatalf("expected run-2 to be latest, got %+v", latest)
 	}
 
 	if err := store.SetRunState("run-1", "AI_RUNNING"); err != nil {
@@ -126,6 +138,20 @@ func TestSessionAndRunLifecycle(t *testing.T) {
 	}
 	if gotRun.CompletedAt == nil {
 		t.Fatalf("expected completed_at to be set: %+v", gotRun)
+	}
+
+	if err := store.SetSessionWorktreePath("sess-1", "/tmp/acme-api/branches/fog-add-login-run-2"); err != nil {
+		t.Fatalf("set session worktree path failed: %v", err)
+	}
+	gotSession, found, err = store.GetSession("sess-1")
+	if err != nil {
+		t.Fatalf("get session after worktree update failed: %v", err)
+	}
+	if !found {
+		t.Fatal("expected session to exist after worktree update")
+	}
+	if gotSession.WorktreePath != "/tmp/acme-api/branches/fog-add-login-run-2" {
+		t.Fatalf("unexpected session worktree path: %q", gotSession.WorktreePath)
 	}
 
 	if err := store.AppendRunEvent(RunEvent{

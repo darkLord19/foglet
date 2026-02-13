@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/darkLord19/foglet/internal/editor"
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
 	"github.com/darkLord19/foglet/internal/toolcfg"
@@ -52,6 +54,19 @@ type asyncCreateSessionResponse struct {
 type sessionDetailResponse struct {
 	Session state.Session `json:"session"`
 	Runs    []state.Run   `json:"runs"`
+}
+
+type sessionSummary struct {
+	state.Session
+	LatestRun *state.Run `json:"latest_run,omitempty"`
+}
+
+type sessionDiffResponse struct {
+	BaseBranch   string `json:"base_branch"`
+	Branch       string `json:"branch"`
+	WorktreePath string `json:"worktree_path"`
+	Stat         string `json:"stat"`
+	Patch        string `json:"patch"`
 }
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
@@ -101,6 +116,19 @@ func (s *Server) handleSessionDetail(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if len(parts) == 2 {
+		switch {
+		case parts[1] == "cancel" && r.Method == http.MethodPost:
+			s.cancelSessionRun(w, sessionID)
+			return
+		case parts[1] == "diff" && r.Method == http.MethodGet:
+			s.getSessionDiff(w, sessionID)
+			return
+		case parts[1] == "open" && r.Method == http.MethodPost:
+			s.openSessionWorktree(w, sessionID)
+			return
+		}
+	}
 
 	http.NotFound(w, r)
 }
@@ -112,8 +140,21 @@ func (s *Server) listSessions(w http.ResponseWriter) {
 		return
 	}
 
+	out := make([]sessionSummary, 0, len(sessions))
+	for _, sess := range sessions {
+		var latest *state.Run
+		if run, found, err := s.stateStore.GetLatestRun(sess.ID); err == nil && found {
+			runCopy := run
+			latest = &runCopy
+		}
+		out = append(out, sessionSummary{
+			Session:   sess,
+			LatestRun: latest,
+		})
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(sessions)
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
@@ -331,6 +372,140 @@ func (s *Server) listRunEvents(w http.ResponseWriter, r *http.Request, sessionID
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(events)
+}
+
+func (s *Server) cancelSessionRun(w http.ResponseWriter, sessionID string) {
+	run, err := s.runner.CancelSessionLatestRun(sessionID)
+	if err != nil {
+		status := http.StatusBadRequest
+		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+			status = http.StatusNotFound
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status": "cancel_requested",
+		"run_id": run.ID,
+	})
+}
+
+func (s *Server) getSessionDiff(w http.ResponseWriter, sessionID string) {
+	session, found, err := s.runner.GetSession(sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.Error(w, "session not found", http.StatusNotFound)
+		return
+	}
+
+	repo, found, err := s.stateStore.GetRepoByName(session.RepoName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.Error(w, "repo not found", http.StatusNotFound)
+		return
+	}
+
+	worktreePath := strings.TrimSpace(session.WorktreePath)
+	if latest, found, err := s.stateStore.GetLatestRun(session.ID); err == nil && found && strings.TrimSpace(latest.WorktreePath) != "" {
+		worktreePath = strings.TrimSpace(latest.WorktreePath)
+	}
+	if worktreePath == "" {
+		http.Error(w, "session has no worktree path", http.StatusBadRequest)
+		return
+	}
+
+	baseBranch := strings.TrimSpace(repo.DefaultBranch)
+	if baseBranch == "" {
+		baseBranch = "main"
+	}
+	diffRef := fmt.Sprintf("%s...%s", baseBranch, session.Branch)
+	statOut, err := runGitInWorktree(worktreePath, "diff", "--stat", "--no-color", diffRef)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	patchOut, err := runGitInWorktree(worktreePath, "diff", "--no-color", diffRef)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(sessionDiffResponse{
+		BaseBranch:   baseBranch,
+		Branch:       session.Branch,
+		WorktreePath: worktreePath,
+		Stat:         strings.TrimSpace(statOut),
+		Patch:        strings.TrimSpace(patchOut),
+	})
+}
+
+func (s *Server) openSessionWorktree(w http.ResponseWriter, sessionID string) {
+	session, found, err := s.runner.GetSession(sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.Error(w, "session not found", http.StatusNotFound)
+		return
+	}
+
+	worktreePath := strings.TrimSpace(session.WorktreePath)
+	if latest, found, err := s.stateStore.GetLatestRun(session.ID); err == nil && found && strings.TrimSpace(latest.WorktreePath) != "" {
+		worktreePath = strings.TrimSpace(latest.WorktreePath)
+	}
+	if worktreePath == "" {
+		http.Error(w, "session has no worktree path", http.StatusBadRequest)
+		return
+	}
+
+	pref := preferredEditorForTool(session.Tool)
+	ed, err := editor.Detect(pref)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := ed.Open(worktreePath, true); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status":        "opened",
+		"editor":        ed.Name(),
+		"worktree_path": worktreePath,
+	})
+}
+
+func preferredEditorForTool(toolName string) string {
+	switch strings.TrimSpace(toolName) {
+	case "cursor":
+		return "cursor"
+	case "claude", "claude-code":
+		return "claudecode"
+	default:
+		return ""
+	}
+}
+
+func runGitInWorktree(worktreePath string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = worktreePath
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git %s failed: %w\n%s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
+	return string(out), nil
 }
 
 func (s *Server) resolveBranchName(requested, prompt string) (string, error) {

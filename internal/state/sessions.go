@@ -26,16 +26,17 @@ type Session struct {
 
 // Run is one execution step inside a session.
 type Run struct {
-	ID          string     `json:"id"`
-	SessionID   string     `json:"session_id"`
-	Prompt      string     `json:"prompt"`
-	State       string     `json:"state"`
-	CommitSHA   string     `json:"commit_sha,omitempty"`
-	CommitMsg   string     `json:"commit_msg,omitempty"`
-	Error       string     `json:"error,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	ID           string     `json:"id"`
+	SessionID    string     `json:"session_id"`
+	Prompt       string     `json:"prompt"`
+	WorktreePath string     `json:"worktree_path"`
+	State        string     `json:"state"`
+	CommitSHA    string     `json:"commit_sha,omitempty"`
+	CommitMsg    string     `json:"commit_msg,omitempty"`
+	Error        string     `json:"error,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	CompletedAt  *time.Time `json:"completed_at,omitempty"`
 }
 
 // RunEvent captures one timeline event for a run.
@@ -285,11 +286,40 @@ func (s *Store) SetSessionPRURL(id, prURL string) error {
 	return nil
 }
 
+// SetSessionWorktreePath updates the session's latest run worktree path.
+func (s *Store) SetSessionWorktreePath(id, worktreePath string) error {
+	id = strings.TrimSpace(id)
+	worktreePath = strings.TrimSpace(worktreePath)
+	if id == "" {
+		return errors.New("session id cannot be empty")
+	}
+	if worktreePath == "" {
+		return errors.New("session worktree_path cannot be empty")
+	}
+
+	res, err := s.db.Exec(
+		`UPDATE sessions
+		    SET worktree_path = ?, updated_at = ?
+		  WHERE id = ?`,
+		worktreePath,
+		nowRFC3339Nano(),
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("set session worktree_path %q: %w", id, err)
+	}
+	if err := ensureRowsAffected(res, "session "+id); err != nil {
+		return err
+	}
+	return nil
+}
+
 // CreateRun inserts a run under one session.
 func (s *Store) CreateRun(run Run) error {
 	run.ID = strings.TrimSpace(run.ID)
 	run.SessionID = strings.TrimSpace(run.SessionID)
 	run.Prompt = strings.TrimSpace(run.Prompt)
+	run.WorktreePath = strings.TrimSpace(run.WorktreePath)
 	run.State = strings.TrimSpace(run.State)
 	run.CommitSHA = strings.TrimSpace(run.CommitSHA)
 	run.CommitMsg = strings.TrimSpace(run.CommitMsg)
@@ -302,6 +332,8 @@ func (s *Store) CreateRun(run Run) error {
 		return errors.New("run session_id cannot be empty")
 	case run.Prompt == "":
 		return errors.New("run prompt cannot be empty")
+	case run.WorktreePath == "":
+		return errors.New("run worktree_path cannot be empty")
 	case run.State == "":
 		return errors.New("run state cannot be empty")
 	}
@@ -321,11 +353,12 @@ func (s *Store) CreateRun(run Run) error {
 	}
 
 	_, err := s.db.Exec(
-		`INSERT INTO runs(id, session_id, prompt, state, commit_sha, commit_msg, error, created_at, updated_at, completed_at)
-		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO runs(id, session_id, prompt, worktree_path, state, commit_sha, commit_msg, error, created_at, updated_at, completed_at)
+		 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		run.ID,
 		run.SessionID,
 		run.Prompt,
+		run.WorktreePath,
 		run.State,
 		run.CommitSHA,
 		run.CommitMsg,
@@ -352,7 +385,7 @@ func (s *Store) GetRun(id string) (Run, bool, error) {
 	var updatedAtRaw string
 	var completedAtRaw sql.NullString
 	err := s.db.QueryRow(
-		`SELECT id, session_id, prompt, state, commit_sha, commit_msg, error, created_at, updated_at, completed_at
+		`SELECT id, session_id, prompt, worktree_path, state, commit_sha, commit_msg, error, created_at, updated_at, completed_at
 		   FROM runs
 		  WHERE id = ?`,
 		id,
@@ -360,6 +393,7 @@ func (s *Store) GetRun(id string) (Run, bool, error) {
 		&run.ID,
 		&run.SessionID,
 		&run.Prompt,
+		&run.WorktreePath,
 		&run.State,
 		&run.CommitSHA,
 		&run.CommitMsg,
@@ -402,7 +436,7 @@ func (s *Store) ListRuns(sessionID string) ([]Run, error) {
 	}
 
 	rows, err := s.db.Query(
-		`SELECT id, session_id, prompt, state, commit_sha, commit_msg, error, created_at, updated_at, completed_at
+		`SELECT id, session_id, prompt, worktree_path, state, commit_sha, commit_msg, error, created_at, updated_at, completed_at
 		   FROM runs
 		  WHERE session_id = ?
 		  ORDER BY created_at DESC`,
@@ -423,6 +457,7 @@ func (s *Store) ListRuns(sessionID string) ([]Run, error) {
 			&run.ID,
 			&run.SessionID,
 			&run.Prompt,
+			&run.WorktreePath,
 			&run.State,
 			&run.CommitSHA,
 			&run.CommitMsg,
@@ -454,6 +489,62 @@ func (s *Store) ListRuns(sessionID string) ([]Run, error) {
 		return nil, fmt.Errorf("iterate runs: %w", err)
 	}
 	return runs, nil
+}
+
+// GetLatestRun returns the most recently created run for a session.
+func (s *Store) GetLatestRun(sessionID string) (Run, bool, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return Run{}, false, errors.New("session id cannot be empty")
+	}
+
+	var run Run
+	var createdAtRaw string
+	var updatedAtRaw string
+	var completedAtRaw sql.NullString
+	err := s.db.QueryRow(
+		`SELECT id, session_id, prompt, worktree_path, state, commit_sha, commit_msg, error, created_at, updated_at, completed_at
+		   FROM runs
+		  WHERE session_id = ?
+		  ORDER BY created_at DESC
+		  LIMIT 1`,
+		sessionID,
+	).Scan(
+		&run.ID,
+		&run.SessionID,
+		&run.Prompt,
+		&run.WorktreePath,
+		&run.State,
+		&run.CommitSHA,
+		&run.CommitMsg,
+		&run.Error,
+		&createdAtRaw,
+		&updatedAtRaw,
+		&completedAtRaw,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Run{}, false, nil
+	}
+	if err != nil {
+		return Run{}, false, fmt.Errorf("get latest run for session %q: %w", sessionID, err)
+	}
+
+	run.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAtRaw)
+	if err != nil {
+		return Run{}, false, fmt.Errorf("parse run created_at %q: %w", run.ID, err)
+	}
+	run.UpdatedAt, err = time.Parse(time.RFC3339Nano, updatedAtRaw)
+	if err != nil {
+		return Run{}, false, fmt.Errorf("parse run updated_at %q: %w", run.ID, err)
+	}
+	if completedAtRaw.Valid {
+		parsed, err := time.Parse(time.RFC3339Nano, completedAtRaw.String)
+		if err != nil {
+			return Run{}, false, fmt.Errorf("parse run completed_at %q: %w", run.ID, err)
+		}
+		run.CompletedAt = &parsed
+	}
+	return run, true, nil
 }
 
 // SetRunState updates only the state and updated timestamp.

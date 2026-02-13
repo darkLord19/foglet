@@ -139,6 +139,7 @@ func (s *Store) init() error {
 			id TEXT PRIMARY KEY,
 			session_id TEXT NOT NULL,
 			prompt TEXT NOT NULL,
+			worktree_path TEXT,
 			state TEXT NOT NULL,
 			commit_sha TEXT,
 			commit_msg TEXT,
@@ -177,6 +178,9 @@ func (s *Store) init() error {
 		if _, err := s.db.Exec(stmt); err != nil {
 			return fmt.Errorf("init schema: %w", err)
 		}
+	}
+	if err := s.ensureRunsSchema(); err != nil {
+		return err
 	}
 
 	return nil
@@ -448,4 +452,49 @@ func (s *Store) GetRepoByName(name string) (Repo, bool, error) {
 
 func nowRFC3339Nano() string {
 	return time.Now().UTC().Format(time.RFC3339Nano)
+}
+
+func (s *Store) ensureRunsSchema() error {
+	const table = "runs"
+	if hasWorktree, err := s.tableColumnExists(table, "worktree_path"); err != nil {
+		return err
+	} else if !hasWorktree {
+		if _, err := s.db.Exec(`ALTER TABLE runs ADD COLUMN worktree_path TEXT`); err != nil {
+			return fmt.Errorf("add runs.worktree_path column: %w", err)
+		}
+	}
+	return nil
+}
+
+func (s *Store) tableColumnExists(tableName, columnName string) (bool, error) {
+	tableName = strings.TrimSpace(tableName)
+	columnName = strings.TrimSpace(columnName)
+	if tableName == "" || columnName == "" {
+		return false, errors.New("table and column names are required")
+	}
+
+	rows, err := s.db.Query(`PRAGMA table_info(` + tableName + `)`)
+	if err != nil {
+		return false, fmt.Errorf("table info for %s: %w", tableName, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var ctype string
+		var notnull int
+		var dflt sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false, fmt.Errorf("scan table info %s: %w", tableName, err)
+		}
+		if strings.EqualFold(name, columnName) {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("iterate table info %s: %w", tableName, err)
+	}
+	return false, nil
 }

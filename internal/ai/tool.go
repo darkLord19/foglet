@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 )
@@ -9,7 +10,7 @@ import (
 type Tool interface {
 	Name() string
 	IsAvailable() bool
-	Execute(workdir, prompt string) (*Result, error)
+	Execute(ctx context.Context, workdir, prompt string) (*Result, error)
 }
 
 // Result contains the AI execution result

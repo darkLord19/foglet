@@ -1,10 +1,12 @@
 package runner
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/darkLord19/foglet/internal/ai"
 	"github.com/darkLord19/foglet/internal/state"
@@ -17,6 +19,8 @@ type Runner struct {
 	configDir string
 	taskStore *task.Store
 	state     *state.Store
+	mu        sync.Mutex
+	active    map[string]*activeRun
 }
 
 // New creates a new runner
@@ -31,6 +35,7 @@ func New(repoPath, configDir string) (*Runner, error) {
 		repoPath:  repoPath,
 		configDir: configDir,
 		taskStore: store,
+		active:    make(map[string]*activeRun),
 	}, nil
 }
 
@@ -154,7 +159,7 @@ func (r *Runner) runAI(t *task.Task) error {
 	}
 
 	// Execute AI
-	result, err := tool.Execute(t.WorktreePath, t.Prompt)
+	result, err := tool.Execute(context.Background(), t.WorktreePath, t.Prompt)
 	if err != nil {
 		return err
 	}
@@ -286,11 +291,23 @@ func commandExists(name string) bool {
 }
 
 func (r *Runner) createWorktreePath(repoPath, branch string) (string, error) {
+	return r.createWorktreePathWithName(repoPath, branch, branch)
+}
+
+func (r *Runner) createWorktreePathWithName(repoPath, name, branch string) (string, error) {
+	name = strings.TrimSpace(name)
+	branch = strings.TrimSpace(branch)
 	if !isGitRepo(repoPath) {
 		return "", fmt.Errorf("not a git repository: %s", repoPath)
 	}
+	if name == "" {
+		return "", fmt.Errorf("worktree name is required")
+	}
+	if branch == "" {
+		return "", fmt.Errorf("worktree branch is required")
+	}
 
-	cmd := exec.Command("wtx", "add", "--json", branch)
+	cmd := exec.Command("wtx", "add", "--json", name, branch)
 	cmd.Dir = repoPath
 
 	output, err := cmd.CombinedOutput()
