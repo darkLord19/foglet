@@ -11,7 +11,7 @@ Fog orchestrates AI coding tasks using existing AI tools in isolated Git worktre
 Fog is a **local-first developer system** that:
 - Runs AI coding tasks in **isolated worktrees**
 - Supports **Cursor, Claude Code, Aider**
-- Provides **CLI, Desktop App, HTTP API, and Slack** interfaces
+- Provides **CLI, Desktop App, and HTTP API** interfaces
 - Creates **clean PRs** automatically
 - Executes tasks **asynchronously**
 
@@ -47,12 +47,10 @@ fog config view       # Combined wtx + fog config view
 ```
 
 ### 3. fogd - Control Plane
-Daemon with HTTP API + Slack
+Daemon with local HTTP API (desktop app uses this)
 
 ```bash
-fogd --port 8080 --enable-slack --slack-mode socket \
-  --slack-bot-token xoxb-... \
-  --slack-app-token xapp-...
+fogd --port 8080
 ```
 
 ## 🚀 Quick Start
@@ -123,22 +121,6 @@ fog repos import
 # ~/.fog/repos/<alias>/base (base worktree)
 ```
 
-### Slack Usage
-
-```
-@fog [repo='acme-api' tool='claude' autopr=true branch-name='feature-search' commit-msg='add search'] implement full-text search
-
-# Follow-up in the same Slack thread (plain prompt only)
-@fog tighten validation and add tests
-```
-
-→ Response:
-```
-✅ Task completed: feature-search
-Duration: 2m 30s
-[Open Branch] [Create PR]
-```
-
 ## ✨ Features
 
 ### wtx (Worktree Management)
@@ -158,12 +140,22 @@ Duration: 2m 30s
 
 ### fogd (Control Plane)
 - 🌐 **HTTP API** - RESTful task management
-- 💬 **Slack** - HTTP slash commands + Socket Mode (`@fog`) with thread follow-ups
 - 🧩 **Desktop-first UI** - `fogapp` (Wails) is the primary local UI
 - 🔗 **Embedded daemon** - desktop app starts bundled fogd API server when needed
 - 🔄 **Async** - Fire-and-forget execution
 - 📢 **Notifications** - Completion alerts
 - 🔌 **Extensible** - Easy to add integrations
+- ✋ **Real stop semantics** - cancels active process group for current run
+- 🌳 **Per-run isolation** - every follow-up/re-run gets a new worktree
+
+### Desktop Session UX (current)
+- Session title is derived from the first line of the prompt.
+- Sidebar separates running and completed sessions.
+- Task detail auto-follows the latest run for timeline/logs/diff.
+- `Stop` cancels only the latest active run.
+- `Re-run` schedules a new run in a separate worktree on the same branch.
+- Diff tab shows changes since base branch (`base...session-branch`).
+- `Open in Editor` opens the latest run worktree.
 
 ## 📚 Documentation
 
@@ -205,19 +197,6 @@ Duration: 2m 30s
 fog run --branch feature-a --tool claude --prompt "..."
 fog run --branch feature-b --tool aider --prompt "..."
 fog list  # See all active tasks
-```
-
-### Team Collaboration
-```
-# Slack: Start task
-@fog [repo='acme-api'] create branch feature-api and add REST endpoints
-
-# Slack thread follow-up
-@fog add pagination and request tests
-
-# Get notification when done
-✅ Task completed
-[Open Branch] [Create PR]
 ```
 
 ### CI/CD Integration
@@ -264,27 +243,17 @@ POST /api/tasks/create
     "async": true
   }
 }
-```
 
-## 💬 Slack Setup
-
-1. Create app at https://api.slack.com/apps
-2. Enable **Socket Mode** and generate an app token (`xapp-...`) with `connections:write`
-3. Add bot scopes: `chat:write`, `app_mentions:read`, `commands`, then install app and copy bot token (`xoxb-...`)
-4. Start fogd in Socket Mode:
-   ```bash
-   fogd --port 8080 --enable-slack --slack-mode socket \
-     --slack-bot-token <xoxb-token> \
-     --slack-app-token <xapp-token>
-   ```
-5. Use in Slack:
-   - Initial task: `@fog [repo='acme-api' tool='claude'] implement OAuth login`
-   - Follow-up (same thread): `@fog add edge-case tests`
-
-HTTP slash-command mode is also supported:
-```bash
-ngrok http 8080
-fogd --port 8080 --enable-slack --slack-mode http --slack-secret <secret>
+# Session APIs (desktop-first)
+GET /api/sessions
+POST /api/sessions
+GET /api/sessions/{id}
+GET /api/sessions/{id}/runs
+POST /api/sessions/{id}/runs
+GET /api/sessions/{id}/runs/{run_id}/events
+POST /api/sessions/{id}/cancel
+GET /api/sessions/{id}/diff
+POST /api/sessions/{id}/open
 ```
 
 ## 🏗️ Architecture
@@ -292,12 +261,12 @@ fogd --port 8080 --enable-slack --slack-mode http --slack-secret <secret>
 ```
 ┌──────────────────────────────────┐
 │       User Interfaces            │
-│ CLI │ Desktop │ Slack │ API │ VS Code │
+│ CLI │ Desktop │ API │ VS Code │
 └──────────┬───────────────────────┘
            │
     ┌──────▼──────┐
     │    fogd     │
-    │(HTTP + Slack)│
+    │  (HTTP API)  │
     └──────┬──────┘
            │
     ┌──────▼──────┐
@@ -326,7 +295,7 @@ COMMITTED (git commit)
   ↓
 PR_CREATED (gh pr create)
   ↓
-COMPLETED | FAILED
+COMPLETED | FAILED | CANCELLED
 ```
 
 ## 🛡️ Safety Features

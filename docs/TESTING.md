@@ -115,13 +115,9 @@ In another terminal:
 curl http://localhost:8080/health
 curl http://localhost:8080/api/tasks
 curl http://localhost:8080/api/settings
-curl http://localhost:8080/api/cloud
 curl -X PUT http://localhost:8080/api/settings \
   -H "Content-Type: application/json" \
   -d '{"default_tool":"claude","branch_prefix":"fog"}'
-curl -X PUT http://localhost:8080/api/cloud \
-  -H "Content-Type: application/json" \
-  -d '{"cloud_url":"https://fog-cloud.example"}'
 ```
 
 Create task API test:
@@ -161,13 +157,18 @@ curl -X POST http://localhost:8080/api/sessions/<session_id>/runs \
   -H "Content-Type: application/json" \
   -d '{"prompt":"Follow up: add tests"}'
 curl http://localhost:8080/api/sessions/<session_id>/runs/<run_id>/events
+curl -X POST http://localhost:8080/api/sessions/<session_id>/cancel
+curl http://localhost:8080/api/sessions/<session_id>/diff
+curl -X POST http://localhost:8080/api/sessions/<session_id>/open
 ```
 
 Expected checks:
 - initial session create returns `session_id` and `run_id`
 - follow-up call returns a new `run_id` for the same `session_id`
+- follow-up/re-run allocates a new run worktree path
 - run events include setup/ai/commit phases and terminal state
-- cloud config endpoint persists `cloud_url`
+- cancel endpoint marks latest run as `CANCELLED`
+- diff endpoint returns base-vs-branch diff for latest run worktree
 
 ## 6. Wails Desktop UI smoke test
 
@@ -183,11 +184,13 @@ make fogapp-dev
 
 Expected checks:
 - app starts and `fogd` is auto-started when not already running
-- desktop dashboard renders sessions/repo/settings/cloud panels
+- desktop dashboard renders session/repo/settings panels
 - if PAT/default tool are missing, onboarding fields are shown first
 - onboarding accepts GitHub PAT + default tool and persists both
 - new session + follow-up actions work against local fogd APIs
-- session timeline renders runs/events and branch/compare actions
+- stop action cancels the latest active run
+- re-run creates a new run/worktree in the same session branch
+- detail tabs render timeline/diff/logs/stats
 
 ## 6.1 Desktop frontend E2E smoke tests (headless)
 
@@ -201,8 +204,8 @@ GOCACHE=/tmp/go-build go test ./cmd/fogapp -run TestDesktopFrontendSmokeFlows -c
 ```
 
 Expected checks:
-- mocked API server receives create-session + follow-up + discover/import + settings + cloud save calls
-- frontend timeline loads initial run/events and action buttons
+- mocked API server receives create-session + follow-up + cancel + open + discover/import + settings calls
+- frontend detail view loads initial run/events and tab content
 - test skips automatically if no Chrome/Chromium binary is available
 
 ## 7. Slack HTTP mode test

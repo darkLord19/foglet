@@ -6,7 +6,7 @@ Thank you for your interest in contributing to Fog.
 
 ### Prerequisites
 
-- Go 1.21 or higher
+- Go 1.24 or higher
 - Git
 - Make (optional, but recommended)
 
@@ -78,6 +78,9 @@ go test -cover ./...
 
 # Run specific package
 go test ./internal/git
+
+# Desktop frontend smoke (headless, requires Chrome/Chromium)
+go test ./cmd/fogapp -run TestDesktopFrontendSmokeFlows -count=1
 ```
 
 ## Adding a New Editor

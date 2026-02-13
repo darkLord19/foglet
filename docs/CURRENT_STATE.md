@@ -28,9 +28,10 @@ This document reflects the currently implemented product surface in this reposit
 - UI launcher:
   - `fog app` launches desktop app binary (`fogapp`) when installed.
 - Session execution groundwork is implemented in the runner:
-  - create session (one branch/worktree)
-  - follow-up run execution on same worktree
+  - create session (one branch, one run worktree)
+  - follow-up and re-run execution in new worktrees on the same branch
   - run event logging in SQLite
+  - real process cancellation for active runs
   - auto-commit with AI-generated commit message (fallback to deterministic message)
   - push only when auto-PR is enabled (or session already has PR)
   - draft PR is created once per session, follow-ups update same branch
@@ -47,6 +48,9 @@ This document reflects the currently implemented product surface in this reposit
   - `GET /api/sessions/{id}/runs`
   - `POST /api/sessions/{id}/runs`
   - `GET /api/sessions/{id}/runs/{run_id}/events`
+  - `POST /api/sessions/{id}/cancel`
+  - `GET /api/sessions/{id}/diff`
+  - `POST /api/sessions/{id}/open`
   - `GET /api/repos`
   - `POST /api/repos/discover`
   - `POST /api/repos/import`
@@ -71,13 +75,13 @@ This document reflects the currently implemented product surface in this reposit
   - starts bundled in-process `fogd` server when an external one is not already running
   - loads a desktop-focused UI over existing Fog HTTP APIs
 - Desktop UI supports:
-  - session list and follow-up workflow
-  - session timeline with run history and run events
-  - timeline quick actions for PR/branch/compare links
+  - running/completed session sidebar
+  - first-line prompt session titles
   - new session composer (`repo`, `tool`, `model`, `branch_name`, `autopr`, prompt)
   - repo discover/import
   - settings update (`default_tool`, `branch_prefix`)
-  - cloud URL save + pair + unpair
+  - detail view tabs (`timeline`, `diff`, `logs`, `stats`)
+  - run actions: `Stop`, `Re-run`, `Open in Editor`
 - Current status:
   - Desktop build uses `desktop` build tag and Wails CLI workflow.
   - Linux AppImage packaging is wired into release artifacts via optional build flag.
@@ -161,7 +165,7 @@ State details:
   - `sessions`
   - `runs`
   - `run_events`
-  This is used by session APIs, follow-up workflow, and desktop timeline UI.
+  This is used by session APIs, follow-up workflow, cancellation, and desktop timeline/diff/log UI.
 - Cloud foundation uses a separate SQLite file (`fogcloud.db`) and key file (`cloud.key`) in its configured data dir.
 - Local fogd cloud pairing state is persisted in `~/.fog/fog.db`:
   - settings: `cloud_url`, `cloud_device_id`
