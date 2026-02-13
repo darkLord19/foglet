@@ -33,7 +33,7 @@ var setupCmd = &cobra.Command{
 
 func init() {
 	setupCmd.Flags().StringVar(&setupTokenFlag, "token", "", "GitHub PAT (optional, will prompt if omitted)")
-	setupCmd.Flags().StringVar(&setupDefaultToolFlag, "default-tool", "", "Default AI tool (cursor, claude, aider)")
+	setupCmd.Flags().StringVar(&setupDefaultToolFlag, "default-tool", "", "Default AI tool (cursor, claude, gemini, aider)")
 	rootCmd.AddCommand(setupCmd)
 }
 
@@ -74,7 +74,7 @@ func runSetup() error {
 
 	available := availableTools()
 	if len(available) == 0 {
-		return fmt.Errorf("no supported AI tools found in PATH (expected cursor, claude, or aider)")
+		return fmt.Errorf("no supported AI tools found in PATH (expected cursor, claude, gemini, or aider)")
 	}
 
 	defaultTool, err := chooseDefaultTool(available, setupDefaultToolFlag)
@@ -93,7 +93,7 @@ func runSetup() error {
 }
 
 func availableTools() []string {
-	names := []string{"cursor", "claude", "aider"}
+	names := ai.AvailableToolNames()
 	out := make([]string, 0, len(names))
 	for _, name := range names {
 		tool, err := ai.GetTool(name)
