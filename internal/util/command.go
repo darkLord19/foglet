@@ -2,6 +2,7 @@ package util
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -18,6 +19,18 @@ type CommandResult struct {
 
 // RunCommand executes a shell command in the given directory
 func RunCommand(command, workdir string) *CommandResult {
+	return runCommand(context.Background(), command, workdir)
+}
+
+// RunCommandWithTimeout executes a command with a timeout
+func RunCommandWithTimeout(command, workdir string, timeout time.Duration) *CommandResult {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	return runCommand(ctx, command, workdir)
+}
+
+func runCommand(ctx context.Context, command, workdir string) *CommandResult {
 	start := time.Now()
 	result := &CommandResult{}
 
@@ -29,7 +42,7 @@ func RunCommand(command, workdir string) *CommandResult {
 	}
 
 	// Create command
-	cmd := exec.Command(parts[0], parts[1:]...)
+	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
 	cmd.Dir = workdir
 
 	// Capture output
@@ -59,11 +72,4 @@ func RunCommand(command, workdir string) *CommandResult {
 	}
 
 	return result
-}
-
-// RunCommandWithTimeout executes a command with a timeout
-func RunCommandWithTimeout(command, workdir string, timeout time.Duration) *CommandResult {
-	// TODO: Implement timeout support
-	// For now, just call RunCommand
-	return RunCommand(command, workdir)
 }
