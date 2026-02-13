@@ -19,6 +19,24 @@ import (
 
 var nonBranchSlugChar = regexp.MustCompile(`[^a-z0-9]+`)
 
+// dangerousShellChars contains characters that enable shell injection when
+// passed through sh -c. We reject commands containing any of these.
+var dangerousShellChars = []string{";", "||", "&&", "|", "`", "$(", "${", ">", "<", "\n", "\r"}
+
+// validateShellCommand rejects commands containing dangerous shell metacharacters.
+func validateShellCommand(cmd string) error {
+	cmd = strings.TrimSpace(cmd)
+	if cmd == "" {
+		return nil
+	}
+	for _, ch := range dangerousShellChars {
+		if strings.Contains(cmd, ch) {
+			return fmt.Errorf("validate_cmd contains forbidden character sequence %q", ch)
+		}
+	}
+	return nil
+}
+
 // CreateSessionRequest is the payload for POST /api/sessions.
 type CreateSessionRequest struct {
 	Repo        string `json:"repo"`
@@ -192,6 +210,10 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "repo and prompt are required", http.StatusBadRequest)
 		return
 	}
+	if err := validateShellCommand(req.ValidateCmd); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	repo, found, err := s.stateStore.GetRepoByName(req.Repo)
 	if err != nil {
@@ -361,6 +383,10 @@ func (s *Server) createForkSession(w http.ResponseWriter, r *http.Request, sourc
 	req.Prompt = strings.TrimSpace(req.Prompt)
 	if req.Prompt == "" {
 		http.Error(w, "prompt is required", http.StatusBadRequest)
+		return
+	}
+	if err := validateShellCommand(req.ValidateCmd); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
