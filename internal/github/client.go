@@ -22,14 +22,14 @@ type Client struct {
 
 // Repo represents a GitHub repository visible to the configured token.
 type Repo struct {
-	ID            int64
-	Name          string
-	FullName      string
-	CloneURL      string
-	Private       bool
-	DefaultBranch string
-	OwnerLogin    string
-	HTMLURL       string
+	ID            int64  `json:"id"`
+	Name          string `json:"name"`
+	FullName      string `json:"full_name"`
+	CloneURL      string `json:"clone_url"`
+	Private       bool   `json:"private"`
+	DefaultBranch string `json:"default_branch"`
+	OwnerLogin    string `json:"owner_login,omitempty"`
+	HTMLURL       string `json:"html_url,omitempty"`
 }
 
 // NewClient builds a client against the default GitHub API URL.

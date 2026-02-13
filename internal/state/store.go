@@ -27,16 +27,16 @@ type Store struct {
 
 // Repo holds Fog's managed repository metadata.
 type Repo struct {
-	ID               int64
-	Name             string
-	URL              string
-	Host             string
-	Owner            string
-	Repo             string
-	BarePath         string
-	BaseWorktreePath string
-	DefaultBranch    string
-	CreatedAt        time.Time
+	ID               int64     `json:"id"`
+	Name             string    `json:"name"`
+	URL              string    `json:"url"`
+	Host             string    `json:"host,omitempty"`
+	Owner            string    `json:"owner,omitempty"`
+	Repo             string    `json:"repo,omitempty"`
+	BarePath         string    `json:"bare_path,omitempty"`
+	BaseWorktreePath string    `json:"base_worktree_path"`
+	DefaultBranch    string    `json:"default_branch,omitempty"`
+	CreatedAt        time.Time `json:"created_at,omitempty"`
 }
 
 // NewStore opens or creates the Fog SQLite database in fogHome.
