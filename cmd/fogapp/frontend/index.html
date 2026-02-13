@@ -7,38 +7,50 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="bg-orb orb-a"></div>
-  <div class="bg-orb orb-b"></div>
-
-  <div class="shell">
-    <header class="topbar">
-      <div>
-        <h1>Fog Desktop</h1>
-        <p>Local-first session orchestration with branch-safe agents.</p>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand-row">
+        <h1>Fog</h1>
+        <div class="meta-pill" id="daemon-badge">fogd: connecting</div>
       </div>
-      <div class="meta">
-        <span class="badge" id="daemon-badge">fogd: connecting</span>
-        <span class="badge" id="version-badge">version: -</span>
+      <div class="meta-row">
+        <span class="meta-pill" id="version-badge">version: -</span>
+        <span class="meta-pill" id="repo-count">repos: 0</span>
       </div>
-    </header>
 
-    <main class="layout">
-      <section class="panel panel-composer">
-        <h2>New Session</h2>
+      <section class="session-group">
+        <h2>Running</h2>
+        <div id="running-sessions" class="session-list">No running sessions.</div>
+      </section>
+
+      <section class="session-group">
+        <h2>Completed</h2>
+        <div id="completed-sessions" class="session-list">No completed sessions.</div>
+      </section>
+
+      <div class="sidebar-actions">
+        <button id="show-new" class="primary" type="button">+ New Task</button>
+        <button id="show-settings" class="ghost" type="button">Settings</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section id="view-new" class="view">
+        <div class="view-head">
+          <h2>New Session</h2>
+          <div id="new-status" class="status"></div>
+        </div>
         <form id="new-session-form" class="form-grid">
-          <label>Repository
+          <label>Repo
             <select id="new-repo"></select>
           </label>
           <label>Tool
             <select id="new-tool">
-              <option value="">default</option>
+              <option value="">Auto</option>
             </select>
           </label>
           <label>Model
             <input id="new-model" placeholder="optional">
-          </label>
-          <label>Branch Name
-            <input id="new-branch" placeholder="optional">
           </label>
           <label>Auto PR
             <select id="new-autopr">
@@ -47,111 +59,111 @@
             </select>
           </label>
           <label class="span-2">Prompt
-            <textarea id="new-prompt" rows="6" placeholder="Describe the task for this session"></textarea>
+            <textarea id="new-prompt" rows="6" placeholder="Describe what you want to do..."></textarea>
           </label>
-          <div class="actions span-2">
-            <button id="new-submit" type="submit">Create Session</button>
-            <span class="status" id="new-status"></span>
+          <details class="span-2 advanced" id="new-advanced">
+            <summary>Advanced</summary>
+            <div class="form-grid adv-grid">
+              <label>Branch name
+                <input id="new-branch" placeholder="optional">
+              </label>
+              <label>Commit message
+                <input id="new-commit-msg" placeholder="optional">
+              </label>
+              <label>Validate
+                <select id="new-validate">
+                  <option value="false">false</option>
+                  <option value="true">true</option>
+                </select>
+              </label>
+              <label>Validate command
+                <input id="new-validate-cmd" placeholder="optional">
+              </label>
+            </div>
+          </details>
+          <div class="span-2 actions">
+            <button id="new-submit" class="primary" type="submit">Run</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="view-detail" class="view hidden">
+        <div class="view-head">
+          <div>
+            <h2 id="detail-title">Task</h2>
+            <div id="detail-meta" class="muted">Select a task from the sidebar.</div>
+          </div>
+          <div class="actions">
+            <button id="detail-stop" class="danger" type="button">Stop</button>
+            <button id="detail-rerun" class="ghost" type="button">Re-run</button>
+            <button id="detail-open" class="ghost" type="button">Open in Editor</button>
+          </div>
+        </div>
+
+        <form id="followup-form" class="followup-form">
+          <label>Follow-up Prompt
+            <textarea id="followup-prompt" rows="3" placeholder="Continue this session..."></textarea>
+          </label>
+          <div class="actions">
+            <button id="followup-submit" class="primary" type="submit">Send</button>
+            <div id="followup-status" class="status"></div>
           </div>
         </form>
 
-        <h3>Follow-up</h3>
-        <form id="followup-form" class="form-grid">
-          <label>Session
-            <select id="followup-session"></select>
-          </label>
-          <label class="span-2">Prompt
-            <textarea id="followup-prompt" rows="4" placeholder="Add another instruction in the same branch"></textarea>
-          </label>
-          <div class="actions span-2">
-            <button id="followup-submit" type="submit">Send Follow-up</button>
-            <span class="status" id="followup-status"></span>
-          </div>
-        </form>
-      </section>
-
-      <section class="panel panel-sessions">
-        <div class="panel-head">
-          <h2>Active Sessions</h2>
-          <div class="kpi">
-            <span id="kpi-active">0 active</span>
-            <span id="kpi-total">0 total</span>
-          </div>
+        <div class="tabs" id="detail-tabs">
+          <button class="tab active" data-tab="timeline" type="button">Timeline</button>
+          <button class="tab" data-tab="diff" type="button">Diff</button>
+          <button class="tab" data-tab="logs" type="button">Logs</button>
+          <button class="tab" data-tab="stats" type="button">Stats</button>
         </div>
-        <div id="sessions-list" class="session-list"></div>
-        <div class="timeline">
-          <div class="panel-head">
-            <h3>Session Timeline</h3>
-            <div id="timeline-actions" class="actions"></div>
-          </div>
-          <div id="timeline-summary" class="timeline-summary">Select a session to inspect its runs and events.</div>
-          <div id="timeline-runs" class="timeline-runs box-list">No runs loaded.</div>
-          <div id="timeline-events" class="timeline-events box-list">No run events loaded.</div>
+
+        <div class="tab-panels">
+          <section id="tab-timeline" class="tab-panel"></section>
+          <section id="tab-diff" class="tab-panel hidden"></section>
+          <section id="tab-logs" class="tab-panel hidden"></section>
+          <section id="tab-stats" class="tab-panel hidden"></section>
         </div>
       </section>
 
-      <section class="panel">
-        <h2>Repositories</h2>
-        <div class="actions">
-          <button id="discover-btn" type="button" class="ghost">Discover</button>
-          <button id="import-btn" type="button">Import Selected</button>
-          <span class="status" id="repos-status"></span>
+      <section id="view-settings" class="view hidden">
+        <div class="view-head">
+          <h2>Settings</h2>
+          <div id="settings-status" class="status"></div>
         </div>
-        <div id="discover-list" class="box-list">No discovered repos yet.</div>
-        <h3>Managed Repos</h3>
-        <div id="managed-list" class="box-list">Loading…</div>
-      </section>
 
-      <section class="panel">
-        <h2>Settings</h2>
-        <form id="settings-form" class="form-grid">
-          <label>Default Tool
+        <form id="settings-form" class="form-grid settings-form">
+          <label>Default tool
             <select id="settings-tool"></select>
           </label>
-          <label>Branch Prefix
+          <label>Branch prefix
             <input id="settings-prefix" placeholder="fog">
           </label>
-          <label class="span-2">GitHub PAT Status
+          <label>GitHub PAT status
             <input id="settings-pat-status" disabled>
+          </label>
+          <label>Onboarding
+            <input id="settings-onboarding" disabled>
           </label>
           <label class="span-2">GitHub PAT (optional update)
             <input id="settings-pat" type="password" placeholder="ghp_...">
           </label>
-          <label class="span-2">Onboarding
-            <input id="settings-onboarding" disabled>
-          </label>
-          <div class="actions span-2">
-            <button id="settings-submit" type="submit">Save Settings</button>
-            <span class="status" id="settings-status"></span>
+          <div class="span-2 actions">
+            <button id="settings-submit" class="primary" type="submit">Save Settings</button>
           </div>
         </form>
 
-        <h3>Cloud Pairing</h3>
-        <form id="cloud-form" class="form-grid">
-          <label class="span-2">Cloud URL
-            <input id="cloud-url" placeholder="https://fog-cloud.example">
-          </label>
-          <label>Pair Code
-            <input id="cloud-code" placeholder="AB12CD34">
-          </label>
+        <div class="repos-head">
+          <h3>Repos</h3>
           <div class="actions">
-            <button id="cloud-save" type="button" class="ghost">Save URL</button>
-            <button id="cloud-pair" type="button">Pair</button>
+            <button id="discover-btn" class="ghost" type="button">Discover</button>
+            <button id="import-btn" class="ghost" type="button">Import Selected</button>
+            <span id="repos-status" class="status"></span>
           </div>
-          <label>Team ID
-            <input id="cloud-team" placeholder="T123">
-          </label>
-          <label>Slack User ID
-            <input id="cloud-user" placeholder="U123">
-          </label>
-          <div class="actions span-2">
-            <button id="cloud-unpair" type="button" class="ghost">Unpair</button>
-            <span class="status" id="cloud-status"></span>
-          </div>
-          <label class="span-2">Device
-            <input id="cloud-device" disabled>
-          </label>
-        </form>
+        </div>
+        <div id="discover-list" class="box-list">No discovered repos yet.</div>
+
+        <h3>Managed Repos</h3>
+        <div id="managed-list" class="box-list">Loading...</div>
       </section>
     </main>
   </div>

@@ -54,19 +54,33 @@ func TestDesktopFrontendSmokeFlows(t *testing.T) {
 		chromedp.Navigate(frontendServer.URL),
 		chromedp.WaitVisible("#new-session-form", chromedp.ByQuery),
 		waitTextContains("#daemon-badge", "connected"),
-		waitTextContains("#timeline-summary", "owner/repo"),
-		waitTextContains("#timeline-runs", "COMPLETED"),
-		waitTextContains("#timeline-events", "Run completed"),
-		waitTextContains("#timeline-actions", "Open Branch"),
+		waitTextContains("#completed-sessions", "Initial prompt"),
+		waitTextContains("#detail-title", "Initial prompt"),
+
+		chromedp.Click("#show-new", chromedp.ByQuery),
 
 		chromedp.SetValue("#new-prompt", "Implement desktop smoke flow", chromedp.ByQuery),
 		chromedp.Click("#new-submit", chromedp.ByQuery),
 		waitTextContains("#new-status", "Queued session"),
+		waitTextContains("#running-sessions", "Implement desktop smoke flow"),
+
+		chromedp.Click("#running-sessions .session-item", chromedp.ByQuery),
+		waitTextContains("#detail-title", "Implement desktop smoke flow"),
 
 		chromedp.SetValue("#followup-prompt", "Add regression tests", chromedp.ByQuery),
 		chromedp.Click("#followup-submit", chromedp.ByQuery),
 		waitTextContains("#followup-status", "Queued run"),
 
+		chromedp.Click("#detail-rerun", chromedp.ByQuery),
+		waitTextContains("#followup-status", "Queued re-run"),
+
+		chromedp.Click("#detail-stop", chromedp.ByQuery),
+		waitTextContains("#followup-status", "Cancel requested"),
+
+		chromedp.Click("#detail-open", chromedp.ByQuery),
+		waitTextContains("#followup-status", "Opened in"),
+
+		chromedp.Click("#show-settings", chromedp.ByQuery),
 		chromedp.Click("#discover-btn", chromedp.ByQuery),
 		chromedp.WaitVisible("#repo-0", chromedp.ByQuery),
 		chromedp.Click("#repo-0", chromedp.ByQuery),
@@ -77,9 +91,6 @@ func TestDesktopFrontendSmokeFlows(t *testing.T) {
 		chromedp.SetValue("#settings-pat", "ghp_mock_token", chromedp.ByQuery),
 		chromedp.Click("#settings-submit", chromedp.ByQuery),
 		waitTextContains("#settings-status", "Saved"),
-
-		chromedp.Click("#cloud-save", chromedp.ByQuery),
-		waitTextContains("#cloud-status", "Cloud URL saved"),
 	)
 	if err != nil {
 		t.Fatalf("desktop e2e flow failed: %v", err)
@@ -98,8 +109,11 @@ func TestDesktopFrontendSmokeFlows(t *testing.T) {
 	if stats.settingsPutCount < 1 {
 		t.Fatalf("expected settings update call, got %+v", stats)
 	}
-	if stats.cloudPutCount < 1 {
-		t.Fatalf("expected cloud url save call, got %+v", stats)
+	if stats.cancelCount < 1 {
+		t.Fatalf("expected cancel call, got %+v", stats)
+	}
+	if stats.openCount < 1 {
+		t.Fatalf("expected open-in-editor call, got %+v", stats)
 	}
 }
 
@@ -109,7 +123,8 @@ type e2eStats struct {
 	discoverCount      int
 	importCount        int
 	settingsPutCount   int
-	cloudPutCount      int
+	cancelCount        int
+	openCount          int
 }
 
 type mockFogAPI struct {
@@ -119,7 +134,6 @@ type mockFogAPI struct {
 
 	settings map[string]interface{}
 	repos    []map[string]interface{}
-	cloud    map[string]interface{}
 	sessions []map[string]interface{}
 	runs     map[string][]map[string]interface{}
 	events   map[string][]map[string]interface{}
@@ -129,26 +143,28 @@ func newMockFogAPI() *mockFogAPI {
 	now := time.Now().UTC()
 	sessions := []map[string]interface{}{
 		{
-			"id":         "session-1",
-			"repo_name":  "owner/repo",
-			"branch":     "fog/session-one",
-			"tool":       "claude",
-			"status":     "COMPLETED",
-			"busy":       false,
-			"autopr":     false,
-			"pr_url":     "",
-			"updated_at": now.Format(time.RFC3339),
+			"id":            "session-1",
+			"repo_name":     "owner/repo",
+			"branch":        "fog/session-one",
+			"worktree_path": "/tmp/owner-repo/worktrees/fog-session-one-run-1",
+			"tool":          "claude",
+			"status":        "COMPLETED",
+			"busy":          false,
+			"autopr":        false,
+			"pr_url":        "",
+			"updated_at":    now.Format(time.RFC3339),
 		},
 	}
 	runs := map[string][]map[string]interface{}{
 		"session-1": {
 			{
-				"id":         "run-1",
-				"session_id": "session-1",
-				"prompt":     "Initial prompt",
-				"state":      "COMPLETED",
-				"created_at": now.Add(-3 * time.Minute).Format(time.RFC3339),
-				"updated_at": now.Add(-2 * time.Minute).Format(time.RFC3339),
+				"id":            "run-1",
+				"session_id":    "session-1",
+				"prompt":        "Initial prompt",
+				"worktree_path": "/tmp/owner-repo/worktrees/fog-session-one-run-1",
+				"state":         "COMPLETED",
+				"created_at":    now.Add(-3 * time.Minute).Format(time.RFC3339),
+				"updated_at":    now.Add(-2 * time.Minute).Format(time.RFC3339),
 			},
 		},
 	}
@@ -175,12 +191,6 @@ func newMockFogAPI() *mockFogAPI {
 				"base_worktree_path": "/tmp/owner-repo/base",
 			},
 		},
-		cloud: map[string]interface{}{
-			"cloud_url":        "https://fog-cloud.example",
-			"device_id":        "device-1",
-			"has_device_token": true,
-			"paired":           true,
-		},
 		sessions: sessions,
 		runs:     runs,
 		events:   events,
@@ -195,6 +205,37 @@ func (m *mockFogAPI) statsSnapshot() e2eStats {
 
 func (m *mockFogAPI) stats() e2eStats {
 	return m.statsSnapshot()
+}
+
+func firstRunID(runs []map[string]interface{}) string {
+	if len(runs) == 0 {
+		return ""
+	}
+	if id, ok := runs[0]["id"].(string); ok {
+		return id
+	}
+	return ""
+}
+
+func (m *mockFogAPI) sessionSummariesLocked() []map[string]interface{} {
+	out := make([]map[string]interface{}, 0, len(m.sessions))
+	for _, session := range m.sessions {
+		copySession := map[string]interface{}{}
+		for k, v := range session {
+			copySession[k] = v
+		}
+		sid, _ := session["id"].(string)
+		runs := m.runs[sid]
+		if len(runs) > 0 {
+			latest := map[string]interface{}{}
+			for k, v := range runs[0] {
+				latest[k] = v
+			}
+			copySession["latest_run"] = latest
+		}
+		out = append(out, copySession)
+	}
+	return out
 }
 
 func (m *mockFogAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -242,54 +283,42 @@ func (m *mockFogAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"failed":   []string{},
 		})
 		return
-	case r.Method == http.MethodGet && r.URL.Path == "/api/cloud":
-		writeJSON(http.StatusOK, m.cloud)
-		return
-	case r.Method == http.MethodPut && r.URL.Path == "/api/cloud":
-		m.counters.cloudPutCount++
-		var in map[string]interface{}
-		_ = json.NewDecoder(r.Body).Decode(&in)
-		if v, ok := in["cloud_url"].(string); ok && strings.TrimSpace(v) != "" {
-			m.cloud["cloud_url"] = v
-		}
-		writeJSON(http.StatusOK, m.cloud)
-		return
-	case r.Method == http.MethodPost && r.URL.Path == "/api/cloud/pair":
-		m.cloud["paired"] = true
-		writeJSON(http.StatusOK, m.cloud)
-		return
-	case r.Method == http.MethodPost && r.URL.Path == "/api/cloud/unpair":
-		m.cloud["paired"] = false
-		writeJSON(http.StatusOK, m.cloud)
-		return
 	case r.Method == http.MethodGet && r.URL.Path == "/api/sessions":
-		writeJSON(http.StatusOK, m.sessions)
+		writeJSON(http.StatusOK, m.sessionSummariesLocked())
 		return
 	case r.Method == http.MethodPost && r.URL.Path == "/api/sessions":
 		m.counters.createSessionCount++
+		var in map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		prompt := "New session"
+		if v, ok := in["prompt"].(string); ok && strings.TrimSpace(v) != "" {
+			prompt = strings.TrimSpace(v)
+		}
 		id := "session-" + strconv.Itoa(len(m.sessions)+1)
 		runID := "run-" + strconv.Itoa(len(m.events)+1)
 		now := time.Now().UTC().Format(time.RFC3339)
 		session := map[string]interface{}{
-			"id":         id,
-			"repo_name":  "owner/repo",
-			"branch":     "fog/new-session",
-			"tool":       "claude",
-			"status":     "CREATED",
-			"busy":       true,
-			"autopr":     false,
-			"pr_url":     "",
-			"updated_at": now,
+			"id":            id,
+			"repo_name":     "owner/repo",
+			"branch":        "fog/new-session",
+			"worktree_path": "/tmp/owner-repo/worktrees/" + id + "-" + runID,
+			"tool":          "claude",
+			"status":        "CREATED",
+			"busy":          true,
+			"autopr":        false,
+			"pr_url":        "",
+			"updated_at":    now,
 		}
 		m.sessions = append([]map[string]interface{}{session}, m.sessions...)
 		m.runs[id] = []map[string]interface{}{
 			{
-				"id":         runID,
-				"session_id": id,
-				"prompt":     "New session",
-				"state":      "CREATED",
-				"created_at": now,
-				"updated_at": now,
+				"id":            runID,
+				"session_id":    id,
+				"prompt":        prompt,
+				"worktree_path": "/tmp/owner-repo/worktrees/" + id + "-" + runID,
+				"state":         "CREATED",
+				"created_at":    now,
+				"updated_at":    now,
 			},
 		}
 		m.events[runID] = []map[string]interface{}{
@@ -324,25 +353,97 @@ func (m *mockFogAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if len(parts) == 2 && parts[1] == "runs" && r.Method == http.MethodPost {
 			m.counters.followupCount++
 			sid := parts[0]
+			var in map[string]interface{}
+			_ = json.NewDecoder(r.Body).Decode(&in)
+			prompt := "Follow-up"
+			if v, ok := in["prompt"].(string); ok && strings.TrimSpace(v) != "" {
+				prompt = strings.TrimSpace(v)
+			}
 			runID := "run-" + strconv.Itoa(len(m.events)+1)
 			now := time.Now().UTC().Format(time.RFC3339)
 			m.runs[sid] = append([]map[string]interface{}{
 				{
-					"id":         runID,
-					"session_id": sid,
-					"prompt":     "Follow-up",
-					"state":      "CREATED",
-					"created_at": now,
-					"updated_at": now,
+					"id":            runID,
+					"session_id":    sid,
+					"prompt":        prompt,
+					"worktree_path": "/tmp/owner-repo/worktrees/" + sid + "-" + runID,
+					"state":         "CREATED",
+					"created_at":    now,
+					"updated_at":    now,
 				},
 			}, m.runs[sid]...)
 			m.events[runID] = []map[string]interface{}{
 				{"id": 1, "run_id": runID, "ts": now, "type": "ai_start", "message": "queued"},
 			}
+			for _, s := range m.sessions {
+				if s["id"] == sid {
+					s["busy"] = true
+					s["status"] = "AI_RUNNING"
+					s["worktree_path"] = "/tmp/owner-repo/worktrees/" + sid + "-" + runID
+					s["updated_at"] = now
+					break
+				}
+			}
 			writeJSON(http.StatusAccepted, map[string]interface{}{
 				"run_id":  runID,
 				"status":  "accepted",
 				"session": sid,
+			})
+			return
+		}
+		if len(parts) == 2 && parts[1] == "cancel" && r.Method == http.MethodPost {
+			m.counters.cancelCount++
+			sid := parts[0]
+			latest := firstRunID(m.runs[sid])
+			now := time.Now().UTC().Format(time.RFC3339)
+			for _, run := range m.runs[sid] {
+				if run["id"] == latest {
+					run["state"] = "CANCELLED"
+					run["updated_at"] = now
+					break
+				}
+			}
+			m.events[latest] = append(m.events[latest], map[string]interface{}{
+				"id": len(m.events[latest]) + 1, "run_id": latest, "ts": now, "type": "cancelled", "message": "Run canceled",
+			})
+			for _, s := range m.sessions {
+				if s["id"] == sid {
+					s["busy"] = false
+					s["status"] = "CANCELLED"
+					s["updated_at"] = now
+					break
+				}
+			}
+			writeJSON(http.StatusAccepted, map[string]interface{}{
+				"status": "cancel_requested",
+				"run_id": latest,
+			})
+			return
+		}
+		if len(parts) == 2 && parts[1] == "open" && r.Method == http.MethodPost {
+			m.counters.openCount++
+			sid := parts[0]
+			session := map[string]interface{}{}
+			for _, s := range m.sessions {
+				if s["id"] == sid {
+					session = s
+					break
+				}
+			}
+			writeJSON(http.StatusOK, map[string]interface{}{
+				"status":        "opened",
+				"editor":        "cursor",
+				"worktree_path": session["worktree_path"],
+			})
+			return
+		}
+		if len(parts) == 2 && parts[1] == "diff" && r.Method == http.MethodGet {
+			writeJSON(http.StatusOK, map[string]interface{}{
+				"base_branch":   "main",
+				"branch":        "fog/session-one",
+				"worktree_path": "/tmp/owner-repo/worktrees",
+				"stat":          "1 file changed, 2 insertions(+)",
+				"patch":         "diff --git a/main.go b/main.go\\n+fmt.Println(\\\"hello\\\")",
 			})
 			return
 		}
