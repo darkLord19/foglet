@@ -2,11 +2,11 @@
   import { onMount, onDestroy } from "svelte";
   import { Toaster } from "svelte-sonner";
   import { appState } from "$lib/stores.svelte";
-  import Sidebar from "./components/Sidebar.svelte";
-  import NewSession from "./components/NewSession.svelte";
+  import TopNav from "./components/TopNav.svelte";
+  import HomeView from "./components/HomeView.svelte";
   import SessionDetail from "./components/SessionDetail.svelte";
   import SettingsView from "./components/Settings.svelte";
-  import { fly } from "svelte/transition";
+  import { fly, fade } from "svelte/transition";
 
   let initError = $state("");
 
@@ -34,8 +34,10 @@
 />
 
 <div class="app-shell">
-  <Sidebar />
+  <!-- Top Navigation (always visible) -->
+  <TopNav />
 
+  <!-- Main Content Area -->
   <main class="main-content">
     {#if initError}
       <div class="center-stage" in:fly={{ y: 20, duration: 400 }}>
@@ -50,15 +52,13 @@
         </div>
       </div>
     {:else if appState.currentView === "new"}
-      <div class="view-container" in:fly={{ y: 10, duration: 300, delay: 100 }}>
-        <NewSession />
-      </div>
+      <HomeView />
     {:else if appState.currentView === "detail"}
       <div class="view-container" in:fly={{ y: 10, duration: 300, delay: 100 }}>
         <SessionDetail />
       </div>
     {:else if appState.currentView === "settings"}
-      <div class="view-container" in:fly={{ y: 10, duration: 300, delay: 100 }}>
+      <div class="view-container">
         <SettingsView />
       </div>
     {/if}
@@ -68,6 +68,7 @@
 <style>
   .app-shell {
     display: flex;
+    flex-direction: column;
     height: 100vh;
     overflow: hidden;
     background: var(--color-bg);
@@ -77,15 +78,18 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-width: 0; /* Prevent flex blowout */
+    min-width: 0;
     position: relative;
+    overflow: hidden; /* Fix scroll constraint */
   }
 
+  /* Adjust view-container to respect fixed header */
   .view-container {
     height: 100%;
     width: 100%;
     overflow-y: auto;
     overflow-x: hidden;
+    padding-top: 56px; /* Match header height */
   }
 
   .center-stage {

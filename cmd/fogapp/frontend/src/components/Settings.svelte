@@ -2,6 +2,7 @@
     import { toast } from "svelte-sonner";
     import { appState } from "$lib/stores.svelte";
     import { discoverRepos, updateSettings, importRepos } from "$lib/api";
+    import { CURATED_MODELS } from "$lib/constants";
     import type { DiscoveredRepo, UpdateSettingsPayload } from "$lib/types";
     import { fade, slide } from "svelte/transition";
     import {
@@ -27,15 +28,6 @@
     let defaultNotify = $state(appState.settings?.default_notify || false);
     let branchPrefix = $state(appState.settings?.branch_prefix || "fog/");
     let githubToken = $state("");
-
-    const curatedModels = [
-        "claude-3-5-sonnet-latest",
-        "claude-3-5-sonnet-20241022",
-        "claude-3-opus-latest",
-        "gemini-1.5-pro-latest",
-        "gemini-1.5-flash-latest",
-        "gpt-4o",
-    ];
 
     async function saveAll() {
         loading = true;
@@ -149,7 +141,7 @@
                             class="select"
                         >
                             <option value="">default</option>
-                            {#each curatedModels as m}
+                            {#each CURATED_MODELS as m}
                                 <option value={m}>{m}</option>
                             {/each}
                         </select>
@@ -223,7 +215,9 @@
                 <div class="field-group">
                     <div class="label-v2">
                         <GitBranch size={14} />
-                        <label for="settings-branch-prefix">Git Branch Prefix</label>
+                        <label for="settings-branch-prefix"
+                            >Git Branch Prefix</label
+                        >
                     </div>
                     <input
                         id="settings-branch-prefix"
@@ -307,7 +301,9 @@
                                             >{d.full_name}</span
                                         >
                                         <button
-                                            id={i === 0 ? "settings-import" : undefined}
+                                            id={i === 0
+                                                ? "settings-import"
+                                                : undefined}
                                             class="btn-import"
                                             onclick={() =>
                                                 handleImport(d.full_name)}
@@ -346,8 +342,8 @@
 <style>
     .settings-container {
         max-width: 900px;
-        margin: 0;
-        padding: 60px 40px 120px;
+        margin: 0 auto;
+        padding: 60px 40px 160px;
     }
 
     .settings-header {
@@ -557,16 +553,12 @@
     .action-footer {
         position: fixed;
         bottom: 0;
-        left: 280px; /* sidebar width */
+        left: 0;
         right: 0;
         padding: 24px;
-        background: linear-gradient(
-            to top,
-            var(--color-bg) 60%,
-            rgba(2, 4, 8, 0)
-        );
+        background: linear-gradient(to top, var(--color-bg) 60%, transparent);
         display: flex;
-        justify-content: flex-start;
+        justify-content: center;
         pointer-events: none;
     }
 
