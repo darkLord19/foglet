@@ -2,7 +2,7 @@
     import { toast } from "svelte-sonner";
     import { appState } from "$lib/stores.svelte";
     import { discoverRepos, updateSettings, importRepos } from "$lib/api";
-    import { CURATED_MODELS } from "$lib/constants";
+    import { getModelsForTool } from "$lib/constants";
     import type { DiscoveredRepo, UpdateSettingsPayload } from "$lib/types";
     import { fade, slide } from "svelte/transition";
     import {
@@ -24,11 +24,39 @@
 
     // Local state for settings form
     let defaultTool = $state(appState.settings?.default_tool || "");
-    let defaultModel = $state(appState.settings?.default_model || "");
+    let defaultModels = $state<Record<string, string>>({
+        ...(appState.settings?.default_models ?? {}),
+    });
+    let defaultModel = $state("");
     let defaultAutoPR = $state(appState.settings?.default_autopr || false);
     let defaultNotify = $state(appState.settings?.default_notify || false);
     let branchPrefix = $state(appState.settings?.branch_prefix || "fog/");
     let githubToken = $state("");
+
+    // Models available for the currently-selected default tool
+    let availableModels = $derived(getModelsForTool(defaultTool));
+
+    // When tool changes, load the per-tool default model (or reset)
+    $effect(() => {
+        if (!defaultTool) return;
+        const stored = defaultModels[defaultTool] ?? "";
+        if (stored && availableModels.includes(stored)) {
+            defaultModel = stored;
+        } else if (
+            defaultModel &&
+            availableModels.length > 0 &&
+            !availableModels.includes(defaultModel)
+        ) {
+            defaultModel = "";
+        }
+    });
+
+    // When model changes, write back to the per-tool map
+    $effect(() => {
+        if (defaultTool) {
+            defaultModels[defaultTool] = defaultModel;
+        }
+    });
 
     async function saveAll() {
         loading = true;
@@ -37,6 +65,7 @@
                 default_autopr: defaultAutoPR,
                 default_notify: defaultNotify,
                 default_model: defaultModel,
+                default_models: defaultModels,
             };
             if (defaultTool.trim()) {
                 payload.default_tool = defaultTool.trim();
@@ -139,7 +168,7 @@
                         bind:value={defaultModel}
                         options={[
                             { value: "", label: "Default (Auto)" },
-                            ...CURATED_MODELS.map((m) => ({
+                            ...availableModels.map((m) => ({
                                 value: m,
                                 label: m,
                             })),

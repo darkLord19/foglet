@@ -85,10 +85,7 @@
     </button>
 
     {#if open}
-        <div
-            class="dropdown-menu glass"
-            transition:slide={{ duration: 150, axis: "y" }}
-        >
+        <div class="dropdown-menu-v2">
             <div class="dropdown-scroll">
                 {#each options as opt}
                     {@const isSelected = getValue(opt) === value}
@@ -190,24 +187,22 @@
     }
 
     /* Menu */
-    .dropdown-menu {
+    .dropdown-menu-v2 {
         position: absolute;
         top: calc(100% + 4px);
         left: 0;
         min-width: 100%; /* Match trigger width */
         width: max-content; /* Or allow it to be wider */
         max-width: 300px;
-        z-index: 100;
-        background: var(--color-bg-elevated); /* Solid fallback */
+        z-index: 9999;
+        background-color: #09090b !important; /* Force opaque dark */
+        opacity: 1 !important;
+        backdrop-filter: none !important; /* Ensure no blur/glass */
+        border: 1px solid var(--color-border);
         border-radius: 8px;
         padding: 4px;
         box-shadow: var(--shadow-md);
         overflow: hidden;
-    }
-
-    /* Ensure glass effect works */
-    :global(.glass) {
-        background: rgba(18, 18, 18, 0.85); /* Slightly more opaque for menus */
     }
 
     .dropdown-scroll {

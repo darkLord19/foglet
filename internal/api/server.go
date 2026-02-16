@@ -198,23 +198,25 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 type SettingsResponse struct {
-	DefaultTool        string   `json:"default_tool,omitempty"`
-	DefaultModel       string   `json:"default_model,omitempty"`
-	DefaultAutoPR      bool     `json:"default_autopr"`
-	DefaultNotify      bool     `json:"default_notify"`
-	BranchPrefix       string   `json:"branch_prefix,omitempty"`
-	HasGitHubToken     bool     `json:"has_github_token"`
-	OnboardingRequired bool     `json:"onboarding_required"`
-	AvailableTools     []string `json:"available_tools"`
+	DefaultTool        string            `json:"default_tool,omitempty"`
+	DefaultModel       string            `json:"default_model,omitempty"`
+	DefaultModels      map[string]string `json:"default_models"`
+	DefaultAutoPR      bool              `json:"default_autopr"`
+	DefaultNotify      bool              `json:"default_notify"`
+	BranchPrefix       string            `json:"branch_prefix,omitempty"`
+	HasGitHubToken     bool              `json:"has_github_token"`
+	OnboardingRequired bool              `json:"onboarding_required"`
+	AvailableTools     []string          `json:"available_tools"`
 }
 
 type UpdateSettingsRequest struct {
-	DefaultTool   *string `json:"default_tool"`
-	DefaultModel  *string `json:"default_model"`
-	DefaultAutoPR *bool   `json:"default_autopr"`
-	DefaultNotify *bool   `json:"default_notify"`
-	BranchPrefix  *string `json:"branch_prefix"`
-	GitHubPAT     *string `json:"github_pat"`
+	DefaultTool   *string           `json:"default_tool"`
+	DefaultModel  *string           `json:"default_model"`
+	DefaultModels map[string]string `json:"default_models"`
+	DefaultAutoPR *bool             `json:"default_autopr"`
+	DefaultNotify *bool             `json:"default_notify"`
+	BranchPrefix  *string           `json:"branch_prefix"`
+	GitHubPAT     *string           `json:"github_pat"`
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
@@ -229,8 +231,10 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getSettings(w http.ResponseWriter) {
+	availTools := detectAvailableTools()
 	resp := SettingsResponse{
-		AvailableTools: detectAvailableTools(),
+		AvailableTools: availTools,
+		DefaultModels:  make(map[string]string, len(availTools)),
 	}
 
 	if tool, found, err := s.stateStore.GetDefaultTool(); err == nil && found {
@@ -238,6 +242,12 @@ func (s *Server) getSettings(w http.ResponseWriter) {
 	}
 	if model, found, err := s.stateStore.GetSetting("default_model"); err == nil && found {
 		resp.DefaultModel = model
+	}
+	// Per-tool default models
+	for _, toolName := range availTools {
+		if model, found, err := s.stateStore.GetSetting("default_model_" + toolName); err == nil && found && model != "" {
+			resp.DefaultModels[toolName] = model
+		}
 	}
 	if autopr, found, err := s.stateStore.GetSetting("default_autopr"); err == nil && found {
 		resp.DefaultAutoPR = autopr == "true"
@@ -282,6 +292,13 @@ func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 
 	if req.DefaultModel != nil {
 		if err := s.stateStore.SetSetting("default_model", strings.TrimSpace(*req.DefaultModel)); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	for toolName, model := range req.DefaultModels {
+		if err := s.stateStore.SetSetting("default_model_"+strings.TrimSpace(toolName), strings.TrimSpace(model)); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

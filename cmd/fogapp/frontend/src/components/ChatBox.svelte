@@ -1,7 +1,7 @@
 <script lang="ts">
     import { appState } from "$lib/stores.svelte";
     import { fetchBranches, createSession, importRepos } from "$lib/api";
-    import { CURATED_MODELS } from "$lib/constants";
+    import { getModelsForTool } from "$lib/constants";
     import type {
         CreateSessionPayload,
         DiscoveredRepo,
@@ -38,6 +38,10 @@
     let tool = $state("");
     let model = $state("");
     let mode = $state<"plan" | "build">("build"); // Mapped to internal logic
+
+    // Models available for the currently-selected tool
+    let availableModels = $derived(getModelsForTool(tool));
+
     // Load defaults from settings (runs on every settings change, which is fine
     // since manual selections are sent immediately on submit anyway)
     $effect(() => {
@@ -46,6 +50,21 @@
         }
         if (appState.settings?.default_model) {
             model = appState.settings.default_model;
+        }
+    });
+
+    // When tool changes, auto-select the per-tool default model (or reset)
+    $effect(() => {
+        if (!tool) return;
+        const perToolDefault = appState.settings?.default_models?.[tool] ?? "";
+        if (perToolDefault && availableModels.includes(perToolDefault)) {
+            model = perToolDefault;
+        } else if (
+            model &&
+            availableModels.length > 0 &&
+            !availableModels.includes(model)
+        ) {
+            model = "";
         }
     });
 
@@ -221,7 +240,7 @@
                             bind:value={model}
                             options={[
                                 { value: "", label: "Default Model" },
-                                ...CURATED_MODELS.map((m) => ({
+                                ...availableModels.map((m) => ({
                                     value: m,
                                     label: m,
                                 })),

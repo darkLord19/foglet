@@ -55,6 +55,7 @@ export interface DiffResult {
 export interface Settings {
     default_tool?: string;
     default_model?: string;
+    default_models?: Record<string, string>;
     default_autopr: boolean;
     default_notify: boolean;
     branch_prefix?: string;
@@ -66,6 +67,7 @@ export interface Settings {
 export interface UpdateSettingsPayload {
     default_tool?: string;
     default_model?: string;
+    default_models?: Record<string, string>;
     default_autopr?: boolean;
     default_notify?: boolean;
     branch_prefix?: string;
