@@ -25,7 +25,7 @@ A session is a long-lived branch/worktree "conversation" that you can follow up 
 
 Fog executes tools you already installed:
 - `claude` / `claude-code`
-- `cursor-agent`
+- `cursor` (requires `cursor-agent` binary)
 - `gemini`
 - `aider`
 
@@ -41,7 +41,7 @@ make install
 go install github.com/darkLord19/foglet/cmd/{wtx,fog,fogd,fogcloud,fogapp}@latest
 ```
 
-Onboard (GitHub PAT + default tool):
+Onboard via CLI (GitHub PAT + default tool):
 
 ```bash
 fog setup
@@ -59,6 +59,13 @@ Run the desktop app (dev mode):
 ```bash
 make fogapp-dev
 ```
+
+On first desktop launch, Fog shows an onboarding wizard that walks through:
+- GitHub PAT
+- default tool + tool-specific default model
+- optional repo import
+
+Desktop onboarding requires at least one installed supported AI CLI.
 
 ## Local Storage And Security
 
@@ -81,4 +88,3 @@ Fog never stores your GitHub PAT in plaintext.
 ## License
 
 AGPL-3.0-or-later (see `LICENSE`).
-

@@ -18,11 +18,12 @@ Or install via Go:
 go install github.com/darkLord19/foglet/cmd/{wtx,fog,fogd,fogcloud,fogapp}@latest
 ```
 
-## Onboarding (PAT + Default Tool)
+## Onboarding (CLI + Desktop)
 
 Fog needs:
 - a GitHub Personal Access Token (PAT) to discover/import repos
 - a default AI tool to run when you omit `tool`
+- at least one installed supported AI CLI (`claude`, `cursor-agent`, `gemini`, or `aider`)
 
 ```bash
 fog setup
@@ -38,6 +39,12 @@ You can also set values explicitly:
 ```bash
 fog config set --default-tool gemini --branch-prefix fog
 ```
+
+Desktop onboarding wizard:
+- appears when `onboarding_required` is true
+- step 1: save GitHub PAT
+- step 2: choose default tool and model (tool-specific model list)
+- step 3: optionally discover and import repositories
 
 ## Managed Repos
 
@@ -136,4 +143,3 @@ Adapters prefer headless/streaming modes when available and fall back to plain o
 - `master.key`: local AES-256-GCM key used to encrypt secrets at rest
 
 Secrets are never stored in plaintext.
-
