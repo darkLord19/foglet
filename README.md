@@ -41,7 +41,7 @@ make install
 go install github.com/darkLord19/foglet/cmd/{wtx,fog,fogd,fogcloud,fogapp}@latest
 ```
 
-Onboard via CLI (GitHub PAT + default tool):
+Onboard via CLI (GitHub CLI + default tool):
 
 ```bash
 fog setup
@@ -61,7 +61,7 @@ make fogapp-dev
 ```
 
 On first desktop launch, Fog shows an onboarding wizard that walks through:
-- GitHub PAT
+- GitHub CLI status (install + auth)
 - default tool + tool-specific default model
 - optional repo import
 
@@ -75,7 +75,7 @@ Fog home:
 - `FOG_HOME/master.key` (AES-256-GCM key for encrypting secrets at rest)
 - `FOG_HOME/repos/...` (bare clones + base worktrees)
 
-Fog never stores your GitHub PAT in plaintext.
+Fog uses the authenticated GitHub CLI (`gh`) for GitHub access and does not store a GitHub token.
 
 ## Docs
 

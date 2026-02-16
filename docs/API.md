@@ -19,8 +19,9 @@ Response:
 - `default_autopr` (bool)
 - `default_notify` (bool)
 - `branch_prefix` (string)
-- `has_github_token` (bool)
-- `onboarding_required` (bool, true when PAT is missing or `default_tool` is empty)
+- `gh_installed` (bool)
+- `gh_authenticated` (bool)
+- `onboarding_required` (bool, true when `gh_authenticated` is false or `default_tool` is empty)
 - `available_tools` ([]string)
 
 `PUT /api/settings`
@@ -32,7 +33,15 @@ Body:
 - `default_autopr` (bool, optional)
 - `default_notify` (bool, optional)
 - `branch_prefix` (string, optional)
-- `github_pat` (string, optional)
+
+## GitHub CLI Status
+
+`GET /api/gh/status`
+
+Response:
+- `installed` (bool)
+- `authenticated` (bool)
+- `os` (string)
 
 ## Repos
 
@@ -40,7 +49,7 @@ Body:
 
 `POST /api/repos/discover`
 
-Uses the configured GitHub PAT to list accessible repos.
+Uses the authenticated GitHub CLI (`gh`) to list accessible repos.
 
 `POST /api/repos/import`
 

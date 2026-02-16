@@ -5,7 +5,7 @@
 - Go (use the version in `go.mod`)
 - Git
 - Wails CLI (for desktop dev/build): `wails`
-- Optional (for some flows): `gh` (GitHub CLI), an AI tool (`claude`, `cursor-agent`, `gemini`, `aider`)
+- Optional (required for repo discovery/import): `gh` (GitHub CLI), an AI tool (`claude`, `cursor-agent`, `gemini`, `aider`)
 
 ## Build
 
@@ -74,4 +74,3 @@ FOG_HOME=/tmp/fog-dev go run ./cmd/fogd --port 8080
 ```
 
 If a desktop-launched daemon cannot find tools, it is usually a PATH issue (GUI apps can inherit a limited PATH). Tool detection includes fallbacks for common install locations.
-

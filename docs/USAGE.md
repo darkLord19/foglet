@@ -21,7 +21,7 @@ go install github.com/darkLord19/foglet/cmd/{wtx,fog,fogd,fogcloud,fogapp}@lates
 ## Onboarding (CLI + Desktop)
 
 Fog needs:
-- a GitHub Personal Access Token (PAT) to discover/import repos
+- GitHub CLI (`gh`) installed and authenticated to discover/import repos
 - a default AI tool to run when you omit `tool`
 - at least one installed supported AI CLI (`claude`, `cursor-agent`, `gemini`, or `aider`)
 
@@ -30,8 +30,7 @@ fog setup
 ```
 
 What it does:
-- validates the PAT with GitHub
-- stores the token encrypted at rest in SQLite
+- checks that `gh` is installed and authenticated (`gh auth login`)
 - detects installed tools and sets `default_tool`
 
 You can also set values explicitly:
@@ -42,7 +41,7 @@ fog config set --default-tool gemini --branch-prefix fog
 
 Desktop onboarding wizard:
 - appears when `onboarding_required` is true
-- step 1: save GitHub PAT
+- step 1: verify GitHub CLI status (install + auth)
 - step 2: choose default tool and model (tool-specific model list)
 - step 3: optionally discover and import repositories
 
