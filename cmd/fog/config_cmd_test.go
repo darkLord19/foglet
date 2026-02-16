@@ -23,15 +23,30 @@ func TestValueHelpers(t *testing.T) {
 	if got := valueOrUnset("claude"); got != "claude" {
 		t.Fatalf("valueOrUnset mismatch: %q", got)
 	}
-	if got := boolLabel(true); got != "configured" {
-		t.Fatalf("boolLabel(true) mismatch: %q", got)
+	if got := installedLabel(true); got != "installed" {
+		t.Fatalf("installedLabel(true) mismatch: %q", got)
 	}
-	if got := boolLabel(false); got != "missing" {
-		t.Fatalf("boolLabel(false) mismatch: %q", got)
+	if got := installedLabel(false); got != "missing" {
+		t.Fatalf("installedLabel(false) mismatch: %q", got)
+	}
+	if got := authenticatedLabel(true); got != "authenticated" {
+		t.Fatalf("authenticatedLabel(true) mismatch: %q", got)
+	}
+	if got := authenticatedLabel(false); got != "missing" {
+		t.Fatalf("authenticatedLabel(false) mismatch: %q", got)
 	}
 }
 
 func TestLoadFogConfigView(t *testing.T) {
+	origAvail := isGhAvailableFn
+	origAuth := isGhAuthenticatedFn
+	t.Cleanup(func() {
+		isGhAvailableFn = origAvail
+		isGhAuthenticatedFn = origAuth
+	})
+	isGhAvailableFn = func() bool { return true }
+	isGhAuthenticatedFn = func() bool { return false }
+
 	fogHome := t.TempDir()
 	store, err := state.NewStore(fogHome)
 	if err != nil {
@@ -59,5 +74,11 @@ func TestLoadFogConfigView(t *testing.T) {
 	}
 	if view.ManagedRepos != fogenv.ManagedReposDir(fogHome) {
 		t.Fatalf("unexpected managed repos dir: %s", view.ManagedRepos)
+	}
+	if !view.GhInstalled {
+		t.Fatalf("expected gh to be marked installed")
+	}
+	if view.GhAuthenticated {
+		t.Fatalf("expected gh to be marked not authenticated")
 	}
 }

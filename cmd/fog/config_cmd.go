@@ -25,11 +25,12 @@ type combinedConfigView struct {
 }
 
 type fogConfigView struct {
-	Home           string `json:"home"`
-	ManagedRepos   string `json:"managed_repos_dir"`
-	DefaultTool    string `json:"default_tool,omitempty"`
-	BranchPrefix   string `json:"branch_prefix,omitempty"`
-	HasGitHubToken bool   `json:"has_github_token"`
+	Home            string `json:"home"`
+	ManagedRepos    string `json:"managed_repos_dir"`
+	DefaultTool     string `json:"default_tool,omitempty"`
+	BranchPrefix    string `json:"branch_prefix,omitempty"`
+	GhInstalled     bool   `json:"gh_installed"`
+	GhAuthenticated bool   `json:"gh_authenticated"`
 }
 
 var configCmd = &cobra.Command{
@@ -94,7 +95,8 @@ func runConfigView() error {
 	fmt.Printf("  managed_repos_dir: %s\n", view.Fog.ManagedRepos)
 	fmt.Printf("  default_tool: %s\n", valueOrUnset(view.Fog.DefaultTool))
 	fmt.Printf("  branch_prefix: %s\n", valueOrUnset(view.Fog.BranchPrefix))
-	fmt.Printf("  github_pat: %s\n", boolLabel(view.Fog.HasGitHubToken))
+	fmt.Printf("  gh_installed: %s\n", installedLabel(view.Fog.GhInstalled))
+	fmt.Printf("  gh_authenticated: %s\n", authenticatedLabel(view.Fog.GhAuthenticated))
 
 	return nil
 }
@@ -183,8 +185,9 @@ func loadFogConfigView(store *state.Store, fogHome string) (fogConfigView, error
 	if prefix, found, err := store.GetSetting("branch_prefix"); err == nil && found {
 		view.BranchPrefix = prefix
 	}
-	if hasToken, err := store.HasGitHubToken(); err == nil {
-		view.HasGitHubToken = hasToken
+	view.GhInstalled = isGhAvailableFn()
+	if view.GhInstalled {
+		view.GhAuthenticated = isGhAuthenticatedFn()
 	}
 
 	return view, nil
@@ -218,9 +221,16 @@ func valueOrUnset(value string) string {
 	return value
 }
 
-func boolLabel(ok bool) string {
+func installedLabel(ok bool) string {
 	if ok {
-		return "configured"
+		return "installed"
+	}
+	return "missing"
+}
+
+func authenticatedLabel(ok bool) string {
+	if ok {
+		return "authenticated"
 	}
 	return "missing"
 }
