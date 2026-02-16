@@ -31,7 +31,6 @@
     let defaultAutoPR = $state(appState.settings?.default_autopr || false);
     let defaultNotify = $state(appState.settings?.default_notify || false);
     let branchPrefix = $state(appState.settings?.branch_prefix || "fog/");
-    let githubToken = $state("");
 
     // Models available for the currently-selected default tool
     let availableModels = $derived(getModelsForTool(defaultTool));
@@ -73,14 +72,10 @@
             if (branchPrefix.trim()) {
                 payload.branch_prefix = branchPrefix.trim();
             }
-            if (githubToken.trim()) {
-                payload.github_pat = githubToken.trim();
-            }
 
             const newSettings = await updateSettings(payload);
             appState.settings = newSettings;
             toast.success("Settings saved");
-            githubToken = ""; // Clear for security
         } catch (err) {
             toast.error(
                 "Failed to save settings: " +
@@ -116,7 +111,7 @@
         try {
             await importRepos([repoName]);
             toast.success(`Imported ${repoName}`);
-            discovered = discovered.filter((d) => d.full_name !== repoName);
+            discovered = discovered.filter((d) => d.nameWithOwner !== repoName);
             await appState.refreshRepos();
         } catch (err) {
             toast.error(
@@ -235,7 +230,7 @@
             </div>
         </section>
 
-        <!-- Infrastructure & Security -->
+        <!-- Infrastructure -->
         <section class="settings-group">
             <div class="group-header">
                 <Layers size={16} />
@@ -256,23 +251,43 @@
                         placeholder="fog/"
                     />
                 </div>
-
+                <!-- Removed GitHub PAT section -->
                 <div class="field-group">
                     <div class="label-v2">
                         <Github size={14} />
-                        <label for="settings-github-pat"
-                            >GitHub Authentication PAT</label
-                        >
+                        <label for="gh-status">GitHub CLI Status</label>
                     </div>
-                    <input
-                        id="settings-github-pat"
-                        type="password"
-                        bind:value={githubToken}
-                        class="input"
-                        placeholder={appState.settings?.has_github_token
-                            ? "•••••••• (Token Configured)"
-                            : "Enter Personal Access Token (repo scope)"}
-                    />
+                    <div class="gh-status-display">
+                        <div class="status-row">
+                            <div
+                                class="status-indicator {appState.settings
+                                    ?.gh_installed
+                                    ? 'success'
+                                    : 'error'}"
+                            ></div>
+                            <span
+                                >{appState.settings?.gh_installed
+                                    ? "Installed"
+                                    : "Not Installed"}</span
+                            >
+                        </div>
+                        <div class="status-row">
+                            <div
+                                class="status-indicator {appState.settings
+                                    ?.gh_authenticated
+                                    ? 'success'
+                                    : 'warning'}"
+                            ></div>
+                            <span
+                                >{appState.settings?.gh_authenticated
+                                    ? "Authenticated"
+                                    : "Not Authenticated"}</span
+                            >
+                        </div>
+                    </div>
+                    <p class="input-hint">
+                        Managed via <code>gh</code> CLI tool.
+                    </p>
                 </div>
             </div>
         </section>
@@ -328,7 +343,7 @@
                                 {#each discovered as d, i}
                                     <div class="res-item">
                                         <span class="res-name"
-                                            >{d.full_name}</span
+                                            >{d.nameWithOwner}</span
                                         >
                                         <button
                                             id={i === 0
@@ -336,7 +351,7 @@
                                                 : undefined}
                                             class="btn-import"
                                             onclick={() =>
-                                                handleImport(d.full_name)}
+                                                handleImport(d.nameWithOwner)}
                                         >
                                             <Plus size={12} />
                                             <span>Import</span>
@@ -608,6 +623,39 @@
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
         margin-right: 8px;
+    }
+
+    .gh-status-display {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px;
+        background: var(--color-bg-surface);
+        border-radius: 8px;
+        border: 1px solid var(--color-border);
+    }
+
+    .status-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+    }
+
+    .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+    .status-indicator.success {
+        background-color: var(--color-success);
+    }
+    .status-indicator.error {
+        background-color: var(--color-danger);
+    }
+    .status-indicator.warning {
+        background-color: var(--color-warning);
     }
 
     @keyframes spin {

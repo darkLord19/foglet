@@ -16,6 +16,7 @@ import type {
     Settings,
     UpdateSettingsPayload,
     Branch,
+    GhStatus,
 } from "./types";
 
 let apiBaseURL = "http://127.0.0.1:8080";
@@ -96,6 +97,10 @@ async function fetchJSON<T>(path: string, options?: RequestInit): Promise<T> {
 
 export async function fetchSettings(): Promise<Settings> {
     return fetchJSON<Settings>("/api/settings");
+}
+
+export async function fetchGhStatus(): Promise<GhStatus> {
+    return fetchJSON<GhStatus>("/api/gh/status");
 }
 
 export async function updateSettings(

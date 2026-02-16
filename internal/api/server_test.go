@@ -89,32 +89,6 @@ func TestHandleSettingsPut(t *testing.T) {
 	}
 }
 
-func TestHandleSettingsPutWithGitHubPAT(t *testing.T) {
-	srv := newTestServer(t)
-	body := bytes.NewBufferString(`{"github_pat":"ghp_testtoken123","default_tool":"claude"}`)
-
-	req := httptest.NewRequest(http.MethodPut, "/api/settings", body)
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-
-	srv.handleSettings(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("unexpected status: got %d want %d body=%s", w.Code, http.StatusOK, w.Body.String())
-	}
-
-	token, found, err := srv.stateStore.GetGitHubToken()
-	if err != nil {
-		t.Fatalf("get token failed: %v", err)
-	}
-	if !found {
-		t.Fatalf("expected token to be saved")
-	}
-	if token != "ghp_testtoken123" {
-		t.Fatalf("unexpected token value: %q", token)
-	}
-}
-
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 

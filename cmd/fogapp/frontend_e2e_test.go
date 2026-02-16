@@ -92,7 +92,6 @@ func TestDesktopFrontendSmokeFlows(t *testing.T) {
 		waitToastContains("Imported"),
 
 		chromedp.SetValue("#settings-branch-prefix", "team", chromedp.ByQuery),
-		chromedp.SetValue("#settings-github-pat", "ghp_mock_token", chromedp.ByQuery),
 		chromedp.Click("#settings-save", chromedp.ByQuery),
 		waitToastContains("Settings saved"),
 	)
@@ -183,8 +182,13 @@ func newMockFogAPI() *mockFogAPI {
 	return &mockFogAPI{
 		settings: map[string]interface{}{
 			"default_tool":        "claude",
+			"default_model":       "",
+			"default_models":      map[string]string{},
+			"default_autopr":      false,
+			"default_notify":      false,
 			"branch_prefix":       "fog",
-			"has_github_token":    true,
+			"gh_installed":        true,
+			"gh_authenticated":    true,
 			"onboarding_required": false,
 			"available_tools":     []string{"claude", "cursor"},
 		},
@@ -267,8 +271,17 @@ func (m *mockFogAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if v, ok := in["branch_prefix"].(string); ok && strings.TrimSpace(v) != "" {
 			m.settings["branch_prefix"] = v
 		}
-		if v, ok := in["github_pat"].(string); ok && strings.TrimSpace(v) != "" {
-			m.settings["has_github_token"] = true
+		if v, ok := in["default_model"].(string); ok {
+			m.settings["default_model"] = v
+		}
+		if v, ok := in["default_models"].(map[string]interface{}); ok {
+			m.settings["default_models"] = v
+		}
+		if v, ok := in["default_autopr"].(bool); ok {
+			m.settings["default_autopr"] = v
+		}
+		if v, ok := in["default_notify"].(bool); ok {
+			m.settings["default_notify"] = v
 		}
 		writeJSON(http.StatusOK, m.settings)
 		return
@@ -298,14 +311,34 @@ func (m *mockFogAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && r.URL.Path == "/api/repos/discover":
 		m.counters.discoverCount++
 		writeJSON(http.StatusOK, []map[string]interface{}{
-			{"full_name": "owner/new-repo", "default_branch": "main"},
+			{
+				"id":            "repo-1",
+				"name":          "new-repo",
+				"nameWithOwner": "owner/new-repo",
+				"url":           "https://github.com/owner/new-repo",
+				"isPrivate":     false,
+				"defaultBranchRef": map[string]interface{}{
+					"name": "main",
+				},
+				"owner": map[string]interface{}{
+					"login": "owner",
+				},
+			},
 		})
 		return
 	case r.Method == http.MethodPost && r.URL.Path == "/api/repos/import":
 		m.counters.importCount++
+		// Simulate repo appearing in managed list after import.
+		m.repos = append([]map[string]interface{}{
+			{
+				"name":               "owner/new-repo",
+				"url":                "https://github.com/owner/new-repo.git",
+				"default_branch":     "main",
+				"base_worktree_path": "/tmp/owner-new-repo/base",
+			},
+		}, m.repos...)
 		writeJSON(http.StatusOK, map[string]interface{}{
 			"imported": []string{"owner/new-repo"},
-			"failed":   []string{},
 		})
 		return
 	case r.Method == http.MethodGet && r.URL.Path == "/api/sessions":

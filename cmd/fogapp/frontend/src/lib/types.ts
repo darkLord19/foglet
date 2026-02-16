@@ -59,7 +59,8 @@ export interface Settings {
     default_autopr: boolean;
     default_notify: boolean;
     branch_prefix?: string;
-    has_github_token: boolean;
+    gh_installed: boolean;
+    gh_authenticated: boolean;
     onboarding_required: boolean;
     available_tools: string[];
 }
@@ -71,7 +72,6 @@ export interface UpdateSettingsPayload {
     default_autopr?: boolean;
     default_notify?: boolean;
     branch_prefix?: string;
-    github_pat?: string;
 }
 
 export interface Repo {
@@ -88,14 +88,19 @@ export interface Repo {
 }
 
 export interface DiscoveredRepo {
-    id: number;
+    id: string;
     name: string;
-    full_name: string;
-    clone_url: string;
-    private: boolean;
-    default_branch: string;
-    owner_login?: string;
-    html_url?: string;
+    nameWithOwner: string;
+    url: string;
+    isPrivate: boolean;
+    defaultBranchRef: { name: string };
+    owner: { login: string };
+}
+
+export interface GhStatus {
+    installed: boolean;
+    authenticated: boolean;
+    os: string;
 }
 
 export interface Branch {

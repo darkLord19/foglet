@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	foggithub "github.com/darkLord19/foglet/internal/github"
+	"github.com/darkLord19/foglet/internal/ghcli"
 	"github.com/darkLord19/foglet/internal/state"
 )
 
@@ -49,31 +49,43 @@ func TestHandleReposList(t *testing.T) {
 	}
 }
 
-func TestHandleDiscoverReposRequiresToken(t *testing.T) {
+func TestHandleDiscoverReposRequiresAuth(t *testing.T) {
 	srv := newTestServer(t)
+
+	// Mock GH not authenticated
+	origAuth := isGhAuthenticatedFn
+	t.Cleanup(func() { isGhAuthenticatedFn = origAuth })
+	isGhAuthenticatedFn = func() bool { return false }
+	// Ensure GH is available
+	origAvail := isGhAvailableFn
+	t.Cleanup(func() { isGhAvailableFn = origAvail })
+	isGhAvailableFn = func() bool { return true }
+
 	req := httptest.NewRequest(http.MethodPost, "/api/repos/discover", nil)
 	w := httptest.NewRecorder()
 
 	srv.handleDiscoverRepos(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("unexpected status: got %d want %d", w.Code, http.StatusBadRequest)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("unexpected status: got %d want %d", w.Code, http.StatusUnauthorized)
 	}
 }
 
 func TestHandleDiscoverRepos(t *testing.T) {
 	srv := newTestServer(t)
-	if err := srv.stateStore.SaveGitHubToken("ghp_test"); err != nil {
-		t.Fatalf("save github token failed: %v", err)
-	}
+
+	// Mock GH authenticated
+	origAuth := isGhAuthenticatedFn
+	t.Cleanup(func() { isGhAuthenticatedFn = origAuth })
+	isGhAuthenticatedFn = func() bool { return true }
+	origAvail := isGhAvailableFn
+	t.Cleanup(func() { isGhAvailableFn = origAvail })
+	isGhAvailableFn = func() bool { return true }
 
 	origDiscover := discoverReposFn
 	t.Cleanup(func() { discoverReposFn = origDiscover })
-	discoverReposFn = func(token string) ([]foggithub.Repo, error) {
-		if token != "ghp_test" {
-			t.Fatalf("unexpected token: %s", token)
-		}
-		return []foggithub.Repo{
-			{FullName: "acme/api", Name: "api", OwnerLogin: "acme"},
+	discoverReposFn = func() ([]ghcli.Repo, error) {
+		return []ghcli.Repo{
+			{Name: "api", NameWithOwner: "acme/api", URL: "https://github.com/acme/api", IsPrivate: true},
 		}, nil
 	}
 
@@ -84,11 +96,11 @@ func TestHandleDiscoverRepos(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("unexpected status: got %d want %d body=%s", w.Code, http.StatusOK, w.Body.String())
 	}
-	var repos []foggithub.Repo
+	var repos []ghcli.Repo
 	if err := json.NewDecoder(w.Body).Decode(&repos); err != nil {
 		t.Fatalf("decode repos failed: %v", err)
 	}
-	if len(repos) != 1 || repos[0].FullName != "acme/api" {
+	if len(repos) != 1 || repos[0].NameWithOwner != "acme/api" {
 		t.Fatalf("unexpected discover response: %+v", repos)
 	}
 }
@@ -104,11 +116,37 @@ func TestHandleImportReposRequiresSelection(t *testing.T) {
 	}
 }
 
+func TestHandleImportReposRequiresAuth(t *testing.T) {
+	srv := newTestServer(t)
+
+	origAuth := isGhAuthenticatedFn
+	origAvail := isGhAvailableFn
+	t.Cleanup(func() {
+		isGhAuthenticatedFn = origAuth
+		isGhAvailableFn = origAvail
+	})
+	isGhAvailableFn = func() bool { return true }
+	isGhAuthenticatedFn = func() bool { return false }
+
+	req := httptest.NewRequest(http.MethodPost, "/api/repos/import", bytes.NewBufferString(`{"repos":["acme/api"]}`))
+	w := httptest.NewRecorder()
+	srv.handleImportRepos(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("unexpected status: got %d want %d body=%s", w.Code, http.StatusUnauthorized, w.Body.String())
+	}
+}
+
 func TestHandleImportRepos(t *testing.T) {
 	srv := newTestServer(t)
-	if err := srv.stateStore.SaveGitHubToken("ghp_test"); err != nil {
-		t.Fatalf("save github token failed: %v", err)
-	}
+
+	// Mock GH
+	origAuth := isGhAuthenticatedFn
+	t.Cleanup(func() { isGhAuthenticatedFn = origAuth })
+	isGhAuthenticatedFn = func() bool { return true }
+	origAvail := isGhAvailableFn
+	t.Cleanup(func() { isGhAvailableFn = origAvail })
+	isGhAvailableFn = func() bool { return true }
 
 	origDiscover := discoverReposFn
 	origImport := importReposFn
@@ -117,17 +155,14 @@ func TestHandleImportRepos(t *testing.T) {
 		importReposFn = origImport
 	})
 
-	discoverReposFn = func(token string) ([]foggithub.Repo, error) {
-		return []foggithub.Repo{
-			{FullName: "acme/api", Name: "api", OwnerLogin: "acme", CloneURL: "https://github.com/acme/api.git"},
+	discoverReposFn = func() ([]ghcli.Repo, error) {
+		return []ghcli.Repo{
+			{Name: "api", NameWithOwner: "acme/api", URL: "https://github.com/acme/api"},
 		}, nil
 	}
 
-	importReposFn = func(fogHome string, store *state.Store, token string, repos []foggithub.Repo) ([]string, error) {
-		if token != "ghp_test" {
-			t.Fatalf("unexpected token: %s", token)
-		}
-		if len(repos) != 1 || repos[0].FullName != "acme/api" {
+	importReposFn = func(fogHome string, store *state.Store, repos []ghcli.Repo) ([]string, error) {
+		if len(repos) != 1 || repos[0].NameWithOwner != "acme/api" {
 			t.Fatalf("unexpected import repos input: %+v", repos)
 		}
 		return []string{"acme/api"}, nil
@@ -162,6 +197,12 @@ func TestSplitRepoFullNameValidation(t *testing.T) {
 
 	if _, _, err := splitRepoFullName("bad-format"); err == nil {
 		t.Fatal("expected split failure for bad format")
+	}
+	if _, _, err := splitRepoFullName("../repo"); err == nil {
+		t.Fatal("expected split failure for invalid segment")
+	}
+	if _, _, err := splitRepoFullName("owner/.."); err == nil {
+		t.Fatal("expected split failure for invalid segment")
 	}
 	if _, _, err := splitRepoFullName("../evil/repo"); err == nil {
 		t.Fatal("expected split failure for invalid segment")

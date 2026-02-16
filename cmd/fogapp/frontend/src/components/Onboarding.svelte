@@ -7,27 +7,35 @@
         Loader2,
         Search,
         Github,
+        RefreshCw,
+        Terminal,
     } from "@lucide/svelte";
     import { appState } from "$lib/stores.svelte";
-    import { updateSettings, discoverRepos, importRepos } from "$lib/api";
-    import type { DiscoveredRepo } from "$lib/types";
-    import { TOOL_MODELS, getModelsForTool } from "$lib/constants";
+    import {
+        updateSettings,
+        discoverRepos,
+        importRepos,
+        fetchGhStatus,
+    } from "$lib/api";
+    import type { DiscoveredRepo, GhStatus } from "$lib/types";
+    import { getModelsForTool } from "$lib/constants";
     import Dropdown from "./Dropdown.svelte";
 
     let step = $state(0);
     let loading = $state(false);
     let error = $state("");
 
-    // Step 1: PAT
-    let githubPat = $state("");
+    // Step 0: GH Status
+    let ghStatus = $state<GhStatus | null>(null);
+    let checkingStatus = $state(false);
 
-    // Step 2: Tools
+    // Step 1: Tools
     let selectedTool = $state("");
     let selectedModel = $state("");
 
-    // Step 3: Repos
+    // Step 2: Repos
     let discovered = $state<DiscoveredRepo[]>([]);
-    let selectedRepos = $state<string[]>([]);
+    let selectedRepos = $state<string[]>([]); // repo full names
     let repoSearch = $state("");
 
     let availableTools = $derived(
@@ -46,19 +54,37 @@
             : [],
     );
 
+    onMount(async () => {
+        await checkGhStatus();
+    });
+
+    async function checkGhStatus() {
+        checkingStatus = true;
+        error = "";
+        try {
+            ghStatus = await fetchGhStatus();
+        } catch (err) {
+            error = "Failed to check GitHub CLI status";
+            console.error(err);
+        } finally {
+            checkingStatus = false;
+        }
+    }
+
     async function nextStep() {
         error = "";
         loading = true;
 
         try {
             if (step === 0) {
-                if (!githubPat.trim()) {
+                if (!ghStatus?.installed) {
+                    throw new Error("GitHub CLI must be installed to continue");
+                }
+                if (!ghStatus?.authenticated) {
                     throw new Error(
-                        "Please enter a GitHub Personal Access Token",
+                        "Please authenticate with GitHub CLI to continue",
                     );
                 }
-                // Save PAT
-                await updateSettings({ github_pat: githubPat });
                 // Proceed to tool selection
                 step = 1;
 
@@ -108,11 +134,11 @@
         }
     }
 
-    function toggleRepo(path: string) {
-        if (selectedRepos.includes(path)) {
-            selectedRepos = selectedRepos.filter((p) => p !== path);
+    function toggleRepo(fullName: string) {
+        if (selectedRepos.includes(fullName)) {
+            selectedRepos = selectedRepos.filter((p) => p !== fullName);
         } else {
-            selectedRepos = [...selectedRepos, path];
+            selectedRepos = [...selectedRepos, fullName];
         }
     }
 
@@ -135,7 +161,7 @@
 
     let filteredRepos = $derived(
         discovered.filter((r) =>
-            r.full_name.toLowerCase().includes(repoSearch.toLowerCase()),
+            r.nameWithOwner.toLowerCase().includes(repoSearch.toLowerCase()),
         ),
     );
 </script>
@@ -155,25 +181,101 @@
                     <div class="icon-circle">
                         <Github size={24} />
                     </div>
-                    <h2>Connect GitHub</h2>
+                    <h2>GitHub CLI Setup</h2>
                     <p>
-                        Enter your GitHub Personal Access Token (PAT) to access
-                        your repositories and create pull requests.
+                        Fog uses the GitHub CLI <code>gh</code> for authentication
+                        and repository access.
                     </p>
                 </div>
 
-                <div class="input-group">
-                    <label for="pat">Personal Access Token</label>
-                    <input
-                        id="pat"
-                        type="password"
-                        bind:value={githubPat}
-                        placeholder="ghp_..."
-                        class="text-input"
-                    />
-                    <p class="hint">
-                        Requires <code>repo</code> and <code>read:user</code> scopes.
-                    </p>
+                <div class="gh-status-container">
+                    {#if checkingStatus}
+                        <div class="status-check">
+                            <Loader2 class="spin" size={20} />
+                            <span>Checking status...</span>
+                        </div>
+                    {:else if ghStatus}
+                        <div class="status-item">
+                            <div class="status-label">GitHub CLI Installed</div>
+                            <div
+                                class="status-value {ghStatus.installed
+                                    ? 'success'
+                                    : 'error'}"
+                            >
+                                {#if ghStatus.installed}
+                                    <Check size={18} /> Installed
+                                {:else}
+                                    Not Found
+                                {/if}
+                            </div>
+                        </div>
+
+                        {#if !ghStatus.installed}
+                            <div class="install-instructions">
+                                <p>To install GitHub CLI:</p>
+                                <div class="code-block">
+                                    <Terminal size={14} />
+                                    <code>
+                                        {#if ghStatus.os === "darwin"}
+                                            brew install gh
+                                        {:else}
+                                            sudo apt install gh
+                                        {/if}
+                                    </code>
+                                </div>
+                            </div>
+                        {:else}
+                            <div class="status-item">
+                                <div class="status-label">Authenticated</div>
+                                <div
+                                    class="status-value {ghStatus.authenticated
+                                        ? 'success'
+                                        : 'warning'}"
+                                >
+                                    {#if ghStatus.authenticated}
+                                        <Check size={18} /> Authenticated
+                                    {:else}
+                                        Not Authenticated
+                                    {/if}
+                                </div>
+                            </div>
+
+                            {#if !ghStatus.authenticated}
+                                <div class="install-instructions">
+                                    <p>To authenticate:</p>
+                                    <div class="code-block">
+                                        <Terminal size={14} />
+                                        <code>gh auth login</code>
+                                    </div>
+                                    <p class="sub-hint">
+                                        Run this in your terminal, then refresh.
+                                    </p>
+                                </div>
+                            {/if}
+                        {/if}
+
+                        <button
+                            class="btn btn-secondary refresh-btn"
+                            onclick={checkGhStatus}
+                            disabled={checkingStatus}
+                        >
+                            <RefreshCw
+                                size={16}
+                                class={checkingStatus ? "spin" : ""}
+                            />
+                            Refresh Status
+                        </button>
+                    {:else}
+                        <div class="error-message">
+                            Could not determine status.
+                        </div>
+                        <button
+                            class="btn btn-secondary refresh-btn"
+                            onclick={checkGhStatus}
+                        >
+                            <RefreshCw size={16} /> Retry
+                        </button>
+                    {/if}
                 </div>
             {:else if step === 1}
                 <div class="step-header">
@@ -248,21 +350,21 @@
                             {#each filteredRepos as repo}
                                 <button
                                     class="repo-item {selectedRepos.includes(
-                                        repo.full_name,
+                                        repo.nameWithOwner,
                                     )
                                         ? 'selected'
                                         : ''}"
-                                    onclick={() => toggleRepo(repo.full_name)}
+                                    onclick={() =>
+                                        toggleRepo(repo.nameWithOwner)}
                                 >
                                     <div class="repo-info">
                                         <span class="repo-name"
-                                            >{repo.full_name}</span
+                                            >{repo.nameWithOwner}</span
                                         >
-                                        <span class="repo-path"
-                                            >{repo.clone_url}</span
+                                        <span class="repo-path">{repo.url}</span
                                         >
                                     </div>
-                                    {#if selectedRepos.includes(repo.full_name)}
+                                    {#if selectedRepos.includes(repo.nameWithOwner)}
                                         <Check size={18} class="check-icon" />
                                     {/if}
                                 </button>
@@ -293,6 +395,14 @@
                     {:else}
                         Finish Setup
                     {/if}
+                </button>
+            {:else if step === 0}
+                <button
+                    class="btn btn-primary full-width"
+                    onclick={nextStep}
+                    disabled={!ghStatus?.authenticated}
+                >
+                    Continue <ChevronRight size={16} />
                 </button>
             {:else}
                 <button
@@ -340,9 +450,6 @@
         width: 100%;
         max-width: 480px;
         box-shadow: var(--shadow-xl);
-        width: 100%;
-        max-width: 480px;
-        box-shadow: var(--shadow-xl);
         position: relative;
         display: flex;
         flex-direction: column;
@@ -355,7 +462,7 @@
         width: 100%;
         border-top-left-radius: 16px;
         border-top-right-radius: 16px;
-        overflow: hidden; /* Keep bar fill contained */
+        overflow: hidden;
     }
 
     .progress-fill {
@@ -407,6 +514,96 @@
         line-height: 1.5;
     }
 
+    /* GH Status Styles */
+    .gh-status-container {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .status-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        background: var(--color-bg-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+    }
+
+    .status-label {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--color-text);
+    }
+
+    .status-value {
+        font-size: 13px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .status-value.success {
+        color: var(--color-success);
+    }
+    .status-value.error {
+        color: var(--color-danger);
+    }
+    .status-value.warning {
+        color: var(--color-warning);
+    }
+
+    .install-instructions {
+        background: var(--color-bg-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        padding: 16px;
+        font-size: 13px;
+    }
+
+    .install-instructions p {
+        margin-bottom: 8px;
+        font-weight: 500;
+        color: var(--color-text);
+    }
+
+    .code-block {
+        background: #111;
+        color: #eee;
+        padding: 10px 12px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .sub-hint {
+        margin-top: 8px;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+
+    .refresh-btn {
+        margin-top: 8px;
+        width: 100%;
+    }
+
+    .status-check {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 20px;
+        color: var(--color-text-muted);
+        font-size: 14px;
+    }
+
+    /* Form Styles */
     .input-group {
         margin-bottom: 20px;
     }
@@ -433,19 +630,6 @@
 
     .text-input:focus {
         border-color: var(--color-accent);
-    }
-
-    .hint {
-        font-size: 12px;
-        color: var(--color-text-muted);
-        margin-top: 6px;
-    }
-
-    code {
-        background: var(--color-bg-surface);
-        padding: 2px 4px;
-        border-radius: 4px;
-        font-family: var(--font-mono);
     }
 
     .actions {
@@ -485,6 +669,16 @@
     .btn-primary:disabled {
         opacity: 0.5;
         cursor: not-allowed;
+    }
+
+    .btn-secondary {
+        background: var(--color-bg-hover);
+        color: var(--color-text);
+        border: 1px solid var(--color-border);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+        background: var(--color-bg-active);
     }
 
     .btn-ghost {

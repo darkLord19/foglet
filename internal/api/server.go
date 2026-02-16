@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/darkLord19/foglet/internal/ai"
+	"github.com/darkLord19/foglet/internal/ghcli"
 	"github.com/darkLord19/foglet/internal/git"
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
@@ -47,6 +49,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/repos/discover", s.handleDiscoverRepos)
 	mux.HandleFunc("/api/repos/import", s.handleImportRepos)
 	mux.HandleFunc("/api/settings", s.handleSettings)
+	mux.HandleFunc("/api/gh/status", s.handleGhStatus)
 	mux.HandleFunc("/api/cloud", s.handleCloud)
 	mux.HandleFunc("/api/cloud/pair", s.handleCloudPair)
 	mux.HandleFunc("/api/cloud/unpair", s.handleCloudUnpair)
@@ -204,7 +207,8 @@ type SettingsResponse struct {
 	DefaultAutoPR      bool              `json:"default_autopr"`
 	DefaultNotify      bool              `json:"default_notify"`
 	BranchPrefix       string            `json:"branch_prefix,omitempty"`
-	HasGitHubToken     bool              `json:"has_github_token"`
+	GhInstalled        bool              `json:"gh_installed"`
+	GhAuthenticated    bool              `json:"gh_authenticated"`
 	OnboardingRequired bool              `json:"onboarding_required"`
 	AvailableTools     []string          `json:"available_tools"`
 }
@@ -216,7 +220,6 @@ type UpdateSettingsRequest struct {
 	DefaultAutoPR *bool             `json:"default_autopr"`
 	DefaultNotify *bool             `json:"default_notify"`
 	BranchPrefix  *string           `json:"branch_prefix"`
-	GitHubPAT     *string           `json:"github_pat"`
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
@@ -258,10 +261,13 @@ func (s *Server) getSettings(w http.ResponseWriter) {
 	if prefix, found, err := s.stateStore.GetSetting("branch_prefix"); err == nil && found {
 		resp.BranchPrefix = prefix
 	}
-	if hasToken, err := s.stateStore.HasGitHubToken(); err == nil {
-		resp.HasGitHubToken = hasToken
+
+	resp.GhInstalled = ghcli.IsGhAvailable()
+	if resp.GhInstalled {
+		resp.GhAuthenticated = ghcli.IsGhAuthenticated()
 	}
-	resp.OnboardingRequired = !resp.HasGitHubToken || strings.TrimSpace(resp.DefaultTool) == ""
+
+	resp.OnboardingRequired = !resp.GhAuthenticated || strings.TrimSpace(resp.DefaultTool) == ""
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
@@ -321,18 +327,6 @@ func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 			val = "true"
 		}
 		if err := s.stateStore.SetSetting("default_notify", val); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-
-	if req.GitHubPAT != nil {
-		pat := strings.TrimSpace(*req.GitHubPAT)
-		if pat == "" {
-			http.Error(w, "github_pat cannot be empty", http.StatusBadRequest)
-			return
-		}
-		if err := s.stateStore.SaveGitHubToken(pat); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -472,4 +466,28 @@ func (s *Server) handleListBranches(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(out)
+}
+
+func (s *Server) handleGhStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	status := map[string]interface{}{
+		"installed":     ghcli.IsGhAvailable(),
+		"authenticated": false,
+		"os":            runtimeOS(),
+	}
+
+	if status["installed"].(bool) {
+		status["authenticated"] = ghcli.IsGhAuthenticated()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(status)
+}
+
+func runtimeOS() string {
+	return runtime.GOOS
 }

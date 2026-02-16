@@ -62,11 +62,7 @@
     });
 </script>
 
-<div
-    class="dropdown-container {className}"
-    use:clickOutside
-    onclick_outside={close}
->
+<div class="dropdown-container {className}" use:clickOutside={close}>
     <button
         class="dropdown-trigger variant-{variant} {open ? 'open' : ''}"
         onclick={toggle}
