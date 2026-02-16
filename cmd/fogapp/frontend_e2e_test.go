@@ -52,11 +52,11 @@ func TestDesktopFrontendSmokeFlows(t *testing.T) {
 
 	err := chromedp.Run(ctx,
 		chromedp.Navigate(frontendServer.URL),
-		chromedp.WaitVisible("#new-session-form", chromedp.ByQuery),
-		waitTextContains("#daemon-badge", "connected"),
-		waitTextContains("#completed-sessions", "Initial prompt"),
+		chromedp.WaitVisible(".home-view", chromedp.ByQuery),
+		waitTextContains(".status-pill", "connected"),
+		waitTextContains(".session-history", "Initial prompt"),
 
-		chromedp.Click("#completed-sessions .session-item", chromedp.ByQuery),
+		chromedp.Click(".session-card", chromedp.ByQuery),
 		waitTextContains("#detail-title", "Initial prompt"),
 
 		chromedp.SetValue("#followup-prompt", "Add regression tests", chromedp.ByQuery),
@@ -72,14 +72,17 @@ func TestDesktopFrontendSmokeFlows(t *testing.T) {
 		chromedp.Click("#detail-rerun", chromedp.ByQuery),
 		waitToastContains("Queued re-run"),
 
-		chromedp.Click("#show-new", chromedp.ByQuery),
+		chromedp.Click(".brand-btn", chromedp.ByQuery),
 
-		chromedp.SetValue("#new-prompt", "Implement desktop smoke flow", chromedp.ByQuery),
-		chromedp.Click("#new-submit", chromedp.ByQuery),
-		waitToastContains("Queued session"),
-		waitTextContains("#running-sessions", "Implement desktop smoke flow"),
+		// In the new UI, we might need to select repo first if it's empty
+		// Mock API returns repos, ChatBox auto-selects if one.
+		// We'll assume auto-selection or just type prompt.
+		chromedp.SetValue("#chat-prompt", "Implement desktop smoke flow", chromedp.ByQuery),
+		chromedp.Click("#chat-submit", chromedp.ByQuery),
+		waitToastContains("Session started"),
+		waitTextContains("#detail-title", "Implement desktop smoke flow"),
 
-		chromedp.Click("#show-settings", chromedp.ByQuery),
+		chromedp.Click("#nav-settings", chromedp.ByQuery),
 		chromedp.WaitVisible("#settings-save", chromedp.ByQuery),
 
 		chromedp.Click("#settings-discover", chromedp.ByQuery),
@@ -271,6 +274,26 @@ func (m *mockFogAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	case r.Method == http.MethodGet && r.URL.Path == "/api/repos":
 		writeJSON(http.StatusOK, m.repos)
+		return
+	case r.Method == http.MethodGet && r.URL.Path == "/api/repos/branches":
+		repoName := strings.TrimSpace(r.URL.Query().Get("name"))
+		if repoName == "" {
+			http.Error(w, "repo name required", http.StatusBadRequest)
+			return
+		}
+		defaultBranch := "main"
+		for _, repo := range m.repos {
+			if repo["name"] == repoName {
+				if branch, ok := repo["default_branch"].(string); ok && strings.TrimSpace(branch) != "" {
+					defaultBranch = strings.TrimSpace(branch)
+				}
+				break
+			}
+		}
+		writeJSON(http.StatusOK, []map[string]interface{}{
+			{"name": defaultBranch, "is_default": true},
+			{"name": "develop", "is_default": false},
+		})
 		return
 	case r.Method == http.MethodPost && r.URL.Path == "/api/repos/discover":
 		m.counters.discoverCount++
