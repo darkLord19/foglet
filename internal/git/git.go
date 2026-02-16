@@ -74,3 +74,18 @@ func (g *Git) BranchExists(branch string) bool {
 	_, err := g.exec("show-ref", "--verify", "--quiet", "refs/heads/"+branch)
 	return err == nil
 }
+
+// ListBranches returns a list of local branches.
+func (g *Git) ListBranches() ([]string, error) {
+	out, err := g.exec("branch", "--list", "--format=%(refname:short)")
+	if err != nil {
+		return nil, err
+	}
+	var branches []string
+	for _, line := range strings.Split(out, "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			branches = append(branches, trimmed)
+		}
+	}
+	return branches, nil
+}

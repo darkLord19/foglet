@@ -15,6 +15,7 @@ import type {
     SessionSummary,
     Settings,
     UpdateSettingsPayload,
+    Branch,
 } from "./types";
 
 let apiBaseURL = "http://127.0.0.1:8080";
@@ -129,6 +130,12 @@ export async function importRepos(
 
 export async function fetchSessions(): Promise<SessionSummary[]> {
     return fetchJSON<SessionSummary[]>("/api/sessions");
+}
+
+export async function fetchBranches(repoName: string): Promise<Branch[]> {
+    return fetchJSON<Branch[]>(
+        "/api/repos/branches?name=" + encodeURIComponent(repoName),
+    );
 }
 
 export async function fetchSessionDetail(

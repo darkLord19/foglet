@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/darkLord19/foglet/internal/ai"
+	"github.com/darkLord19/foglet/internal/git"
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
 	"github.com/darkLord19/foglet/internal/task"
@@ -42,6 +43,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/sessions", s.handleSessions)
 	mux.HandleFunc("/api/sessions/", s.handleSessionDetail)
 	mux.HandleFunc("/api/repos", s.handleRepos)
+	mux.HandleFunc("/api/repos/branches", s.handleListBranches)
 	mux.HandleFunc("/api/repos/discover", s.handleDiscoverRepos)
 	mux.HandleFunc("/api/repos/import", s.handleImportRepos)
 	mux.HandleFunc("/api/settings", s.handleSettings)
@@ -406,4 +408,51 @@ func WithBodyLimit(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// handleListBranches lists branches for a repo
+func (s *Server) handleListBranches(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
+	if name == "" {
+		http.Error(w, "repo name required", http.StatusBadRequest)
+		return
+	}
+
+	repo, found, err := s.stateStore.GetRepoByName(name)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !found {
+		http.Error(w, fmt.Sprintf("unknown repo: %s", name), http.StatusNotFound)
+		return
+	}
+
+	g := git.New(repo.BaseWorktreePath)
+	branches, err := g.ListBranches()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("git branch failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	type Branch struct {
+		Name      string `json:"name"`
+		IsDefault bool   `json:"is_default"`
+	}
+
+	out := make([]Branch, 0, len(branches))
+	for _, b := range branches {
+		out = append(out, Branch{
+			Name:      b,
+			IsDefault: b == repo.DefaultBranch,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
 }
