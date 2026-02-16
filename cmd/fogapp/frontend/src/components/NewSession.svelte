@@ -1,8 +1,8 @@
 <script lang="ts">
     import { toast } from "svelte-sonner";
     import { appState } from "$lib/stores.svelte";
-    import { createSession } from "$lib/api";
-    import type { CreateSessionPayload } from "$lib/types";
+    import { createSession, discoverRepos, importRepos } from "$lib/api";
+    import type { CreateSessionPayload, DiscoveredRepo } from "$lib/types";
     import { slide, fade } from "svelte/transition";
     import {
         Sparkles,
@@ -11,6 +11,7 @@
         LayoutGrid,
         Cpu,
         Layers,
+        Search,
     } from "@lucide/svelte";
 
     let prompt = $state("");
@@ -19,6 +20,8 @@
     let model = $state("");
     let submitting = $state(false);
     let showAdvanced = $state(false);
+    let discoverLoading = $state(false);
+    let discovered = $state<DiscoveredRepo[]>([]);
 
     const curatedModels = [
         "claude-3-5-sonnet-latest",
@@ -47,6 +50,27 @@
         if (!model && defaultModel) model = defaultModel;
     });
 
+    async function handleDiscover() {
+        discoverLoading = true;
+        try {
+            discovered = await discoverRepos();
+            if (discovered.length === 0) {
+                toast.info("No repositories found");
+            } else if (discovered.length === 1) {
+                toast.success("Found 1 repository");
+            } else {
+                toast.success(`Found ${discovered.length} repositories`);
+            }
+        } catch (err) {
+            toast.error(
+                "Discovery failed: " +
+                    (err instanceof Error ? err.message : "Error"),
+            );
+        } finally {
+            discoverLoading = false;
+        }
+    }
+
     async function handleSubmit() {
         if (!prompt.trim()) return;
         if (!repo) {
@@ -56,6 +80,12 @@
 
         submitting = true;
         try {
+            const isImported = appState.repos.some((r) => r.name === repo);
+            if (!isImported) {
+                await importRepos([repo]);
+                await appState.refreshRepos();
+            }
+
             const payload: CreateSessionPayload = {
                 repo,
                 prompt: prompt.trim(),
@@ -124,12 +154,49 @@
                                 class="select-minimal"
                             >
                                 <option value="" disabled>Target Repository...</option>
-                                {#each appState.repos as r}
-                                    <option value={r.name}>{r.name}</option>
-                                {/each}
+                                {#if appState.repos.length > 0}
+                                    <optgroup label="Imported">
+                                        {#each appState.repos as r}
+                                            <option value={r.name}>{r.name}</option>
+                                        {/each}
+                                    </optgroup>
+                                {/if}
+                                {#if discovered.length > 0}
+                                    <optgroup label="GitHub">
+                                        {#each discovered.filter(
+                                            (d) =>
+                                                !appState.repos.some(
+                                                    (r) =>
+                                                        r.name === d.full_name,
+                                                ),
+                                        ) as d}
+                                            <option value={d.full_name}
+                                                >{d.full_name}</option
+                                            >
+                                        {/each}
+                                    </optgroup>
+                                {/if}
                             </select>
                             <ChevronDown size={10} class="select-chevron" />
                         </div>
+                        <button
+                            id="new-discover"
+                            type="button"
+                            class="discover-btn"
+                            disabled={discoverLoading ||
+                                !appState.settings?.has_github_token}
+                            onclick={handleDiscover}
+                            title={appState.settings?.has_github_token
+                                ? "Discover GitHub repositories"
+                                : "Configure a GitHub PAT in Settings to discover repositories"}
+                            aria-label="Discover GitHub repositories"
+                        >
+                            {#if discoverLoading}
+                                <div class="discover-loader"></div>
+                            {:else}
+                                <Search size={14} />
+                            {/if}
+                        </button>
                     </div>
                 </div>
 
@@ -337,6 +404,40 @@
     .repo-picker-pill:hover {
         background: rgba(255, 255, 255, 0.05);
         border-color: rgba(59, 130, 246, 0.3);
+    }
+
+    .discover-btn {
+        width: 30px;
+        height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.02);
+        color: var(--color-text-muted);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .discover-btn:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--color-text);
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .discover-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+
+    .discover-loader {
+        width: 14px;
+        height: 14px;
+        border: 2px solid rgba(255, 255, 255, 0.25);
+        border-top-color: rgba(255, 255, 255, 0.8);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
     }
 
     .select-wrapper {
