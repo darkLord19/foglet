@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/darkLord19/foglet/internal/env"
@@ -52,6 +53,7 @@ var runCmd = &cobra.Command{
 	
 Example:
   fog run \
+    --repo owner/repo \
     --branch feature-otp \
     --tool claude \
     --prompt "Add OTP login using Redis" \
@@ -99,7 +101,7 @@ var versionCmd = &cobra.Command{
 func init() {
 	// run command flags
 	runCmd.Flags().StringVar(&flagBranch, "branch", "", "Branch name (required)")
-	runCmd.Flags().StringVar(&flagRepo, "repo", "", "Managed repo alias from fog registry")
+	runCmd.Flags().StringVar(&flagRepo, "repo", "", "Target repository (owner/repo; imported automatically when missing)")
 	runCmd.Flags().StringVar(&flagTool, "tool", "", "AI tool to use (cursor, claude, gemini, aider)")
 	runCmd.Flags().StringVar(&flagPrompt, "prompt", "", "Task prompt (required)")
 	runCmd.Flags().BoolVar(&flagCommit, "commit", false, "Commit changes after AI completes")
@@ -123,12 +125,6 @@ func init() {
 }
 
 func runTask() error {
-	// Get current directory (repo root)
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
 	// Get config dir
 	fogHome, err := env.FogHome()
 	if err != nil {
@@ -147,23 +143,21 @@ func runTask() error {
 		return err
 	}
 
-	repoPath := cwd
-	if flagRepo != "" {
-		repo, found, err := stateStore.GetRepoByName(flagRepo)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return fmt.Errorf("managed repo %q not found; run `fog repos list`", flagRepo)
-		}
-		if repo.BaseWorktreePath == "" {
-			return fmt.Errorf("managed repo %q has no base worktree path", flagRepo)
-		}
-		repoPath = repo.BaseWorktreePath
+	repoName, err := resolveRepoNameForRun(flagRepo, stateStore)
+	if err != nil {
+		return err
+	}
+
+	repo, err := ensureRepoRegisteredForRun(repoName, stateStore, fogHome)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(repo.BaseWorktreePath) == "" {
+		return fmt.Errorf("managed repo %q has no base worktree path", repo.Name)
 	}
 
 	// Create runner
-	r, err := runner.New(repoPath, configDir)
+	r, err := runner.New(repo.BaseWorktreePath, configDir)
 	if err != nil {
 		return err
 	}
