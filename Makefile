@@ -1,4 +1,4 @@
-.PHONY: build test install clean run lint wtx fog fogd fogcloud fogapp-dev fogapp-build release-fogapp-appimage all release-artifacts release-formula
+.PHONY: build test install clean run lint wtx fog fogd fogcloud fogapp-dev fogapp-build release-fogapp-appimage release-fogapp-macos all release-artifacts release-formula
 
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 RELEASE_TAG ?= v0.0.0-dev
@@ -39,6 +39,11 @@ release-fogapp-appimage:
 	@echo "Building fogapp AppImage for $(RELEASE_TAG)..."
 	@chmod +x scripts/release/build-fogapp-appimage.sh
 	@scripts/release/build-fogapp-appimage.sh "$(RELEASE_TAG)" dist
+
+release-fogapp-macos:
+	@echo "Building fogapp macOS DMG for $(RELEASE_TAG)..."
+	@chmod +x scripts/release/build-fogapp-macos.sh
+	@scripts/release/build-fogapp-macos.sh "$(RELEASE_TAG)" dist
 
 # Build all (default target)
 build: all

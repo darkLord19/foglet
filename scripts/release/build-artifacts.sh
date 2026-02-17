@@ -95,6 +95,12 @@ if [[ "${BUILD_FOGAPP_APPIMAGE:-false}" == "true" ]]; then
   "${ROOT_DIR}/scripts/release/build-fogapp-appimage.sh" "${VERSION_TAG}" "${OUTPUT_DIR}"
 fi
 
+if [[ "${BUILD_FOGAPP_MACOS:-false}" == "true" ]]; then
+  echo "building fogapp macOS DMG artifact"
+  chmod +x "${ROOT_DIR}/scripts/release/build-fogapp-macos.sh"
+  "${ROOT_DIR}/scripts/release/build-fogapp-macos.sh" "${VERSION_TAG}" "${OUTPUT_DIR}"
+fi
+
 CHECKSUM_FILE="${OUTPUT_DIR}/wtx_${VERSION}_checksums.txt"
 : > "${CHECKSUM_FILE}"
 for archive in "${OUTPUT_DIR}"/wtx_"${VERSION}"_*.tar.gz; do
@@ -109,6 +115,15 @@ for appimage in "${OUTPUT_DIR}"/fogapp_"${VERSION}"_*.AppImage; do
   fi
   base="$(basename "${appimage}")"
   sum="$(checksum_file "${appimage}")"
+  echo "${sum}  ${base}" >> "${CHECKSUM_FILE}"
+done
+
+for dmg in "${OUTPUT_DIR}"/fogapp_"${VERSION}"_*.dmg; do
+  if [[ ! -f "${dmg}" ]]; then
+    continue
+  fi
+  base="$(basename "${dmg}")"
+  sum="$(checksum_file "${dmg}")"
   echo "${sum}  ${base}" >> "${CHECKSUM_FILE}"
 done
 

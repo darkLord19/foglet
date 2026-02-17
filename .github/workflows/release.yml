@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build-linux:
     runs-on: ubuntu-latest
 
     steps:
@@ -36,7 +36,8 @@ jobs:
       - name: Install desktop packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
+          sudo apt-get clean
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev
           curl -fsSL -o appimagetool.AppImage \
             https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool.AppImage
@@ -47,14 +48,77 @@ jobs:
           chmod +x scripts/release/build-artifacts.sh
           BUILD_FOGAPP_APPIMAGE=true scripts/release/build-artifacts.sh "${GITHUB_REF_NAME}" dist
 
-      # TODO: re-enable once homebrew tap is set up
-      # - name: Generate Homebrew formula
-      #   run: |
-      #     chmod +x scripts/release/generate-homebrew-formula.sh
-      #     scripts/release/generate-homebrew-formula.sh \
-      #       "${GITHUB_REF_NAME}" \
-      #       "dist/wtx_${GITHUB_REF_NAME#v}_checksums.txt" \
-      #       "${GITHUB_REPOSITORY}" > dist/wtx.rb
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: |
+            dist/*.tar.gz
+            dist/*.AppImage
+            dist/*.AppImage.sha256
+            dist/*checksums.txt
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: cmd/fogapp/frontend/package-lock.json
+
+      - name: Build frontend
+        run: npm ci && npm run build
+        working-directory: cmd/fogapp/frontend
+
+      - name: Build macOS DMG
+        run: |
+          chmod +x scripts/release/build-fogapp-macos.sh
+          scripts/release/build-fogapp-macos.sh "${GITHUB_REF_NAME}" dist
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifacts
+          path: |
+            dist/*.dmg
+            dist/*.dmg.sha256
+
+  publish:
+    needs: [build-linux, build-macos]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-artifacts
+          path: dist
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-artifacts
+          path: dist
+
+      - name: Append macOS checksums
+        run: |
+          if ls dist/*.dmg.sha256 1>/dev/null 2>&1; then
+            for f in dist/*.dmg.sha256; do
+              cat "$f" >> dist/wtx_*_checksums.txt
+            done
+          fi
 
       - name: Publish GitHub release assets
         uses: softprops/action-gh-release@v2
@@ -63,21 +127,27 @@ jobs:
             dist/*.tar.gz
             dist/*.AppImage
             dist/*.AppImage.sha256
+            dist/*.dmg
+            dist/*.dmg.sha256
             dist/*checksums.txt
 
       # TODO: re-enable once homebrew tap is set up
-      # - name: Publish Homebrew formula to tap
+      # publish-homebrew:
+      #   needs: [publish]
+      #   runs-on: ubuntu-latest
       #   if: ${{ secrets.HOMEBREW_TAP_REPO != '' && secrets.HOMEBREW_TAP_PAT != '' }}
-      #   env:
-      #     HOMEBREW_TAP_REPO: ${{ secrets.HOMEBREW_TAP_REPO }}
-      #     HOMEBREW_TAP_PAT: ${{ secrets.HOMEBREW_TAP_PAT }}
-      #   run: |
-      #     git clone "https://${HOMEBREW_TAP_PAT}@github.com/${HOMEBREW_TAP_REPO}.git" tap
-      #     mkdir -p tap/Formula
-      #     cp dist/wtx.rb tap/Formula/wtx.rb
-      #     cd tap
-      #     git config user.name "github-actions[bot]"
-      #     git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-      #     git add Formula/wtx.rb
-      #     git commit -m "chore: update wtx formula for ${GITHUB_REF_NAME}" || exit 0
-      #     git push
+      #   steps:
+      #     - name: Publish Homebrew formula to tap
+      #       env:
+      #         HOMEBREW_TAP_REPO: ${{ secrets.HOMEBREW_TAP_REPO }}
+      #         HOMEBREW_TAP_PAT: ${{ secrets.HOMEBREW_TAP_PAT }}
+      #       run: |
+      #         git clone "https://${HOMEBREW_TAP_PAT}@github.com/${HOMEBREW_TAP_REPO}.git" tap
+      #         mkdir -p tap/Formula
+      #         cp dist/wtx.rb tap/Formula/wtx.rb
+      #         cd tap
+      #         git config user.name "github-actions[bot]"
+      #         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      #         git add Formula/wtx.rb
+      #         git commit -m "chore: update wtx formula for ${GITHUB_REF_NAME}" || exit 0
+      #         git push

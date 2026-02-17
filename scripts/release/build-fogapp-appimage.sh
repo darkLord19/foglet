@@ -49,7 +49,7 @@ echo "building fogapp desktop binary (linux/amd64)..."
 (
   cd "${ROOT_DIR}"
   GOOS=linux GOARCH=amd64 CGO_ENABLED=1 \
-    go build -tags desktop -ldflags "-s -w -X main.version=${VERSION_TAG}" \
+    go build -tags "desktop,production,webkit2_41" -ldflags "-s -w -X main.version=${VERSION_TAG}" \
       -o "${APPDIR}/usr/bin/fogapp" ./cmd/fogapp
 )
 
@@ -63,7 +63,7 @@ chmod +x "${APPDIR}/AppRun"
 cat > "${APPDIR}/fogapp.desktop" <<'EOF'
 [Desktop Entry]
 Type=Application
-Name=Fog Desktop
+Name=Fog
 Comment=Turn your local machine into cloud agents
 Exec=fogapp
 Icon=fogapp
@@ -72,19 +72,8 @@ Categories=Development;
 EOF
 cp "${APPDIR}/fogapp.desktop" "${APPDIR}/usr/share/applications/fogapp.desktop"
 
-cat > "${APPDIR}/usr/share/icons/hicolor/256x256/apps/fogapp.png.base64" <<'EOF'
-iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAABpElEQVR4nO3TMQEAIAzAMMC/5yFjRxMF
-fXpn5gBf2z4A4L5AAQgQIECgAgECBAgQqECAAAECBCoQIECAAIGKBAgQIECgAgECBAgQqECAAAECBCoQ
-IECAAIGKBAgQIECgAgECBAgQqECAAAECBCoQIECAAIGKBAgQIECgAgECBAgQqECAAAECBCoQIECAAIGK
-BAgQIECgAgECBAgQqECAAAECBCoQIECAAIGKBAgQIECgAgECBAgQqECAAAECBCoQIECAAIGKBAgQIECg
-AgECBAgQqECAAAECBCoQIECAAIGKBAgQIECgAgECBAgQqECAAAECBCoQIECAAIGKBAgQIECgAgECBAgQ
-qECAAAECBCoQIECAAIGKBAgQIECgAgECBAgQqECAAAECBCoQIECAAIGKBAgQIECgAgECBAgQqECAAAEC
-BCoQIECAAIGKBAgQIECgAgECBAgQqECAAAECBCoQIECAAIGKBAgQIECgAgECBAgQqECAAAECBCoQIECA
-AIGKBAgQIECgAgECBAgQqECAAAECBCoQIECgA7CfB8X26zS5AAAAAElFTkSuQmCC
-EOF
-base64 -d "${APPDIR}/usr/share/icons/hicolor/256x256/apps/fogapp.png.base64" > "${APPDIR}/usr/share/icons/hicolor/256x256/apps/fogapp.png"
+cp "${ROOT_DIR}/cmd/fogapp/build/appicon.png" "${APPDIR}/usr/share/icons/hicolor/256x256/apps/fogapp.png"
 cp "${APPDIR}/usr/share/icons/hicolor/256x256/apps/fogapp.png" "${APPDIR}/fogapp.png"
-rm -f "${APPDIR}/usr/share/icons/hicolor/256x256/apps/fogapp.png.base64"
 
 APPIMAGE_NAME="fogapp_${VERSION}_linux_amd64.AppImage"
 APPIMAGE_PATH="${OUTPUT_DIR}/${APPIMAGE_NAME}"
