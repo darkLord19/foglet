@@ -27,7 +27,7 @@ func (c *Cursor) Execute(ctx context.Context, workdir, prompt string) (*Result, 
 func (c *Cursor) ExecuteStream(ctx context.Context, req ExecuteRequest, onChunk func(string)) (*Result, error) {
 	cmdName := cursorAgentCommand()
 	if cmdName == "" {
-		return nil, fmt.Errorf("cursor-agent not available")
+		return nil, fmt.Errorf("cursor agent CLI not available")
 	}
 
 	streamArgs := buildCursorHeadlessArgs(req, true)
@@ -60,7 +60,12 @@ func (c *Cursor) ExecuteStream(ctx context.Context, req ExecuteRequest, onChunk 
 }
 
 func cursorAgentCommand() string {
-	return commandPath("cursor-agent")
+	for _, name := range []string{"cursor-agent", "agent"} {
+		if path := commandPath(name); path != "" {
+			return path
+		}
+	}
+	return ""
 }
 
 func buildCursorHeadlessArgs(req ExecuteRequest, withStreamJSON bool) []string {

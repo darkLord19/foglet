@@ -30,7 +30,7 @@ func (g *Gemini) ExecuteStream(ctx context.Context, req ExecuteRequest, onChunk 
 		return nil, fmt.Errorf("gemini CLI not available")
 	}
 
-	streamArgs := buildGeminiHeadlessArgs(req, true)
+	streamArgs := buildGeminiHeadlessArgs(req, true, true)
 	streamOutput, conversationID, streamErr := runJSONStreamingCommand(ctx, req.Workdir, cmdName, streamArgs, onChunk)
 	if streamErr == nil {
 		return &Result{
@@ -41,8 +41,29 @@ func (g *Gemini) ExecuteStream(ctx context.Context, req ExecuteRequest, onChunk 
 	}
 
 	if looksLikeUnsupportedFlag(streamOutput) || streamOutput == "" {
-		fallbackArgs := buildGeminiHeadlessArgs(req, false)
+		// Retry without --yolo, which is not supported by all versions.
+		retryArgs := buildGeminiHeadlessArgs(req, true, false)
+		retryOutput, retryConversationID, retryErr := runJSONStreamingCommand(ctx, req.Workdir, cmdName, retryArgs, onChunk)
+		if retryErr == nil {
+			if retryConversationID == "" {
+				retryConversationID = conversationID
+			}
+			return &Result{
+				Success:        true,
+				Output:         strings.TrimSpace(retryOutput),
+				ConversationID: retryConversationID,
+			}, nil
+		}
+		if conversationID == "" {
+			conversationID = retryConversationID
+		}
+
+		fallbackArgs := buildGeminiHeadlessArgs(req, false, true)
 		plainOutput, plainErr := runPlainStreamingCommand(ctx, req.Workdir, cmdName, fallbackArgs, onChunk)
+		if plainErr != nil && (looksLikeUnsupportedFlag(plainOutput) || plainOutput == "") {
+			noYoloArgs := buildGeminiHeadlessArgs(req, false, false)
+			plainOutput, plainErr = runPlainStreamingCommand(ctx, req.Workdir, cmdName, noYoloArgs, onChunk)
+		}
 		return &Result{
 			Success:        plainErr == nil,
 			Output:         strings.TrimSpace(plainOutput),
@@ -68,7 +89,7 @@ func geminiCommand() string {
 	return ""
 }
 
-func buildGeminiHeadlessArgs(req ExecuteRequest, withStreamJSON bool) []string {
+func buildGeminiHeadlessArgs(req ExecuteRequest, withStreamJSON, withYolo bool) []string {
 	args := make([]string, 0, 8)
 	if model := strings.TrimSpace(req.Model); model != "" {
 		args = append(args, "--model", model)
@@ -78,6 +99,9 @@ func buildGeminiHeadlessArgs(req ExecuteRequest, withStreamJSON bool) []string {
 	}
 	if withStreamJSON {
 		args = append(args, "--output-format", "stream-json")
+	}
+	if withYolo {
+		args = append(args, "--yolo")
 	}
 	args = append(args, "-p", strings.TrimSpace(req.Prompt))
 	return args
