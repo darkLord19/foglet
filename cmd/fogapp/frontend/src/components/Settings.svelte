@@ -89,13 +89,24 @@
     async function handleDiscover() {
         discoveryLoading = true;
         try {
-            discovered = await discoverRepos();
+            const allDiscovered = await discoverRepos();
+            const existingNames = new Set(appState.repos.map((r) => r.name));
+            discovered = allDiscovered.filter(
+                (d) => !existingNames.has(d.nameWithOwner),
+            );
+
             if (discovered.length === 0) {
-                toast.info("No repositories found");
+                if (allDiscovered.length > 0) {
+                    toast.info(
+                        "All discovered repositories are already imported",
+                    );
+                } else {
+                    toast.info("No repositories found");
+                }
             } else if (discovered.length === 1) {
-                toast.success("Found 1 repository");
+                toast.success("Found 1 new repository");
             } else {
-                toast.success(`Found ${discovered.length} repositories`);
+                toast.success(`Found ${discovered.length} new repositories`);
             }
         } catch (err) {
             toast.error(
@@ -107,7 +118,11 @@
         }
     }
 
+    let importingRepos = $state<string[]>([]);
+
     async function handleImport(repoName: string) {
+        if (importingRepos.includes(repoName)) return;
+        importingRepos = [...importingRepos, repoName];
         try {
             await importRepos([repoName]);
             toast.success(`Imported ${repoName}`);
@@ -118,6 +133,8 @@
                 "Import failed: " +
                     (err instanceof Error ? err.message : "Error"),
             );
+        } finally {
+            importingRepos = importingRepos.filter((r) => r !== repoName);
         }
     }
 </script>
@@ -350,11 +367,19 @@
                                                 ? "settings-import"
                                                 : undefined}
                                             class="btn-import"
+                                            disabled={importingRepos.includes(
+                                                d.nameWithOwner,
+                                            )}
                                             onclick={() =>
                                                 handleImport(d.nameWithOwner)}
                                         >
-                                            <Plus size={12} />
-                                            <span>Import</span>
+                                            {#if importingRepos.includes(d.nameWithOwner)}
+                                                <div class="mini-loader"></div>
+                                                <span>Importing...</span>
+                                            {:else}
+                                                <Plus size={12} />
+                                                <span>Import</span>
+                                            {/if}
                                         </button>
                                     </div>
                                 {/each}

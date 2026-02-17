@@ -35,6 +35,7 @@
 
     // Step 2: Repos
     let discovered = $state<DiscoveredRepo[]>([]);
+    let discoveredTotal = $state(0);
     let selectedRepos = $state<string[]>([]); // repo full names
     let repoSearch = $state("");
 
@@ -126,7 +127,12 @@
     async function loadRepos() {
         loading = true;
         try {
-            discovered = await discoverRepos();
+            const allDiscovered = await discoverRepos();
+            discoveredTotal = allDiscovered.length;
+            const existingNames = new Set(appState.repos.map((r) => r.name));
+            discovered = allDiscovered.filter(
+                (d) => !existingNames.has(d.nameWithOwner),
+            );
         } catch (err) {
             error = "Failed to discover repositories";
         } finally {
@@ -347,28 +353,60 @@
                                 <span>Fetching from GitHub...</span>
                             </div>
                         {:else}
-                            {#each filteredRepos as repo}
-                                <button
-                                    class="repo-item {selectedRepos.includes(
-                                        repo.nameWithOwner,
-                                    )
-                                        ? 'selected'
-                                        : ''}"
-                                    onclick={() =>
-                                        toggleRepo(repo.nameWithOwner)}
-                                >
-                                    <div class="repo-info">
-                                        <span class="repo-name"
-                                            >{repo.nameWithOwner}</span
+                            {#if filteredRepos.length === 0}
+                                <div class="empty-state">
+                                    {#if discovered.length === 0}
+                                        {#if discoveredTotal > 0}
+                                            <p>
+                                                All discovered repositories are
+                                                already imported.
+                                            </p>
+                                        {:else}
+                                            <p>No repositories found.</p>
+                                        {/if}
+                                        <button
+                                            class="btn btn-secondary"
+                                            onclick={loadRepos}
+                                            disabled={loading}
                                         >
-                                        <span class="repo-path">{repo.url}</span
-                                        >
-                                    </div>
-                                    {#if selectedRepos.includes(repo.nameWithOwner)}
-                                        <Check size={18} class="check-icon" />
+                                            <RefreshCw
+                                                size={16}
+                                                class={loading ? "spin" : ""}
+                                            />
+                                            Refresh
+                                        </button>
+                                    {:else}
+                                        <p>No repositories match your filter.</p>
                                     {/if}
-                                </button>
-                            {/each}
+                                </div>
+                            {:else}
+                                {#each filteredRepos as repo}
+                                    <button
+                                        class="repo-item {selectedRepos.includes(
+                                            repo.nameWithOwner,
+                                        )
+                                            ? 'selected'
+                                            : ''}"
+                                        onclick={() =>
+                                            toggleRepo(repo.nameWithOwner)}
+                                    >
+                                        <div class="repo-info">
+                                            <span class="repo-name"
+                                                >{repo.nameWithOwner}</span
+                                            >
+                                            <span class="repo-path"
+                                                >{repo.url}</span
+                                            >
+                                        </div>
+                                        {#if selectedRepos.includes(repo.nameWithOwner)}
+                                            <Check
+                                                size={18}
+                                                class="check-icon"
+                                            />
+                                        {/if}
+                                    </button>
+                                {/each}
+                            {/if}
                         {/if}
                     </div>
                     <p class="hint-text">{selectedRepos.length} selected</p>
@@ -760,6 +798,23 @@
         color: var(--color-text-muted);
         gap: 12px;
         font-size: 13px;
+    }
+
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        padding: 16px;
+        gap: 12px;
+        text-align: center;
+        color: var(--color-text-muted);
+        font-size: 13px;
+    }
+
+    .empty-state p {
+        margin: 0;
     }
 
     .repo-item {
