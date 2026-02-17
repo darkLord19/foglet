@@ -10,10 +10,16 @@
         ChevronDown,
         Hash,
         History,
-        Terminal as TerminalIcon,
+        User,
+        Bot,
     } from "@lucide/svelte";
 
     const runs = $derived(appState.detailRuns ?? []);
+
+    /** Only ai_output events – logs already live in LogsView */
+    const aiOutputEvents = $derived(
+        appState.detailEvents.filter((e) => e.type === "ai_output"),
+    );
 
     function isTerminal(state: string) {
         switch (state.trim()) {
@@ -91,46 +97,57 @@
                             </div>
                         </header>
 
-                        <div class="run-instructions">
-                            {run.prompt}
-                        </div>
-
-                        {#if run.id === appState.selectedRunID && appState.detailEvents.length > 0}
-                            <div class="run-terminal" transition:slide>
-                                <div class="terminal-bar">
-                                    <TerminalIcon size={12} />
-                                    <span>Activity Intelligence</span>
+                        <!-- Conversation view -->
+                        <div class="conversation">
+                            <!-- User prompt bubble -->
+                            <div class="chat-row user">
+                                <div class="avatar user-avatar">
+                                    <User size={14} />
                                 </div>
-                                <div class="terminal-output">
-                                    {#each appState.detailEvents as evt}
-                                        <div class="log-line">
-                                            <span class="log-ts"
-                                                >{new Date(
-                                                    evt.ts,
-                                                ).toLocaleTimeString([], {
-                                                    hour: "2-digit",
-                                                    minute: "2-digit",
-                                                    second: "2-digit",
-                                                })}</span
-                                            >
-                                            <span class="log-type"
-                                                >[{evt.type}]</span
-                                            >
-                                            <span class="log-msg"
-                                                >{evt.message || evt.data}</span
-                                            >
-                                        </div>
-                                    {/each}
+                                <div class="bubble user-bubble">
+                                    <span class="bubble-label">You</span>
+                                    <p>{run.prompt}</p>
                                 </div>
                             </div>
-                        {:else if run.state === "DONE"}
+
+                            <!-- AI response bubble(s) -->
+                            {#if run.id === appState.selectedRunID && aiOutputEvents.length > 0}
+                                {#each aiOutputEvents as evt}
+                                    <div class="chat-row ai" transition:slide>
+                                        <div class="avatar ai-avatar">
+                                            <Bot size={14} />
+                                        </div>
+                                        <div class="bubble ai-bubble">
+                                            <span class="bubble-label">AI</span>
+                                            <p>{evt.message || evt.data}</p>
+                                        </div>
+                                    </div>
+                                {/each}
+                            {:else if run.id === appState.selectedRunID && isInProgress(run.state)}
+                                <div class="chat-row ai" transition:slide>
+                                    <div class="avatar ai-avatar">
+                                        <Bot size={14} />
+                                    </div>
+                                    <div class="bubble ai-bubble thinking">
+                                        <span class="bubble-label">AI</span>
+                                        <div class="typing-indicator">
+                                            <span class="dot"></span>
+                                            <span class="dot"></span>
+                                            <span class="dot"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            {/if}
+                        </div>
+
+                        {#if run.id !== appState.selectedRunID && isTerminal(run.state)}
                             <button
                                 class="expand-btn"
                                 onclick={() =>
                                     (appState.selectedRunID = run.id)}
                             >
                                 <ChevronDown size={14} />
-                                <span>Inspect Pipeline</span>
+                                <span>View Response</span>
                             </button>
                         {/if}
                     </div>
@@ -315,72 +332,108 @@
         border-color: rgba(251, 191, 36, 0.2);
     }
 
-    .run-instructions {
-        font-size: 14px;
-        line-height: 1.6;
-        color: var(--color-text);
-        font-weight: 500;
-        word-break: break-word;
-    }
-
-    .run-terminal {
-        margin-top: 20px;
-        background: #05070a;
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        overflow: hidden;
-        box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
-    }
-
-    .terminal-bar {
-        background: rgba(255, 255, 255, 0.03);
-        padding: 8px 14px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--color-text-muted);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .terminal-output {
-        padding: 16px;
+    /* ── Conversation layout ── */
+    .conversation {
         display: flex;
         flex-direction: column;
-        gap: 6px;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        max-height: 400px;
-        overflow-y: auto;
+        gap: 16px;
     }
 
-    .log-line {
+    .chat-row {
         display: flex;
-        gap: 14px;
+        gap: 12px;
+        align-items: flex-start;
     }
 
-    .log-ts {
-        color: var(--color-text-muted);
-        opacity: 0.4;
+    .avatar {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         flex-shrink: 0;
     }
 
-    .log-type {
-        color: var(--color-accent);
-        opacity: 0.8;
-        flex-shrink: 0;
-    }
-
-    .log-msg {
+    .user-avatar {
+        background: rgba(255, 255, 255, 0.08);
         color: var(--color-text-secondary);
-        word-break: break-all;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .ai-avatar {
+        background: rgba(59, 130, 246, 0.15);
+        color: var(--color-accent);
+        border: 1px solid rgba(59, 130, 246, 0.25);
+    }
+
+    .bubble {
+        flex: 1;
+        border-radius: 14px;
+        padding: 12px 16px;
+        min-width: 0;
+    }
+
+    .bubble-label {
+        display: block;
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 6px;
+        opacity: 0.5;
+    }
+
+    .bubble p {
+        margin: 0;
+        font-size: 13.5px;
+        line-height: 1.65;
+        word-break: break-word;
+        white-space: pre-wrap;
+    }
+
+    .user-bubble {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--color-text);
+    }
+
+    .ai-bubble {
+        background: rgba(59, 130, 246, 0.06);
+        border: 1px solid rgba(59, 130, 246, 0.12);
+        color: var(--color-text-secondary);
+    }
+
+    .ai-bubble.thinking {
+        padding: 12px 20px;
+    }
+
+    .typing-indicator {
+        display: flex;
+        gap: 5px;
+        align-items: center;
+        padding: 4px 0;
+    }
+
+    .typing-indicator .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--color-accent);
+        opacity: 0.4;
+        animation: typingBounce 1.4s ease-in-out infinite;
+    }
+
+    .typing-indicator .dot:nth-child(2) {
+        animation-delay: 0.2s;
+    }
+
+    .typing-indicator .dot:nth-child(3) {
+        animation-delay: 0.4s;
     }
 
     .expand-btn {
-        margin-top: 16px;
+        margin-top: 12px;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -420,6 +473,19 @@
         to {
             opacity: 1;
             transform: translateY(0);
+        }
+    }
+
+    @keyframes typingBounce {
+        0%,
+        60%,
+        100% {
+            transform: translateY(0);
+            opacity: 0.4;
+        }
+        30% {
+            transform: translateY(-4px);
+            opacity: 1;
         }
     }
 </style>
