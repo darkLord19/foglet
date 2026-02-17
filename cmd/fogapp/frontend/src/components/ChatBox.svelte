@@ -22,7 +22,7 @@
         Settings,
         X,
     } from "@lucide/svelte";
-    import { slide, fade, fly } from "svelte/transition";
+
     import Dropdown from "./Dropdown.svelte";
 
     let { onSessionCreated }: { onSessionCreated?: () => void } = $props();
@@ -184,13 +184,13 @@
 </script>
 
 <div class="chat-container {expanded ? 'expanded' : ''}">
-    <div class="chat-orb glass">
+    <div class="chat-orb">
         <!-- Header: Selectors -->
         <div class="chat-header">
             <!-- Repo Selector -->
             <!-- Repo Selector -->
             {#snippet repoIcon()}
-                <LayoutGrid size={12} class="opacity-50" />
+                <LayoutGrid size={12} class="text-muted" />
             {/snippet}
 
             <Dropdown
@@ -204,9 +204,9 @@
             <!-- Branch Selector -->
             {#if repo}
                 {#snippet branchIcon()}
-                    <GitBranch size={12} class="opacity-50" />
+                    <GitBranch size={12} class="text-muted" />
                 {/snippet}
-                <div transition:slide={{ axis: "x", duration: 200 }}>
+                <div>
                     <Dropdown
                         bind:value={branch}
                         options={branches.map((b) => b.name)}
@@ -241,7 +241,7 @@
                 <!-- Tool Selector -->
                 <!-- Tool Selector -->
                 {#snippet toolIcon()}
-                    <Cpu size={12} class="opacity-50" />
+                    <Cpu size={12} class="text-muted" />
                 {/snippet}
                 <Dropdown
                     bind:value={tool}
@@ -257,9 +257,9 @@
                 <!-- Model Selector -->
                 {#if tool}
                     {#snippet modelIcon()}
-                        <Zap size={12} class="opacity-50" />
+                        <Zap size={12} class="text-muted" />
                     {/snippet}
-                    <div transition:slide={{ axis: "x", duration: 200 }}>
+                    <div>
                         <Dropdown
                             bind:value={model}
                             options={[
@@ -292,7 +292,6 @@
                         class="icon-btn"
                         onclick={openPRConfig}
                         title="Configure PR"
-                        transition:slide={{ axis: "x" }}
                     >
                         <Settings size={14} />
                     </button>
@@ -301,12 +300,8 @@
                         <div
                             class="pr-backdrop"
                             onclick={() => (showPRConfig = false)}
-                            transition:fade={{ duration: 200 }}
                         ></div>
-                        <div
-                            class="pr-config-modal glass"
-                            transition:fly={{ y: 20, duration: 200 }}
-                        >
+                        <div class="pr-config-modal">
                             <div class="pr-header">
                                 <span>PR Configuration</span>
                                 <button
@@ -440,25 +435,24 @@
         width: 100%;
         max-width: 800px;
         margin: 0 auto;
-        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        /* transition removed */
+        position: relative;
+        z-index: 100; /* Force top */
     }
 
     .chat-orb {
-        background: var(--color-bg-input);
-        /* Or a linear gradient slightly lighter than bg */
+        background: #09090b; /* Solid black/dark */
         border: 1px solid var(--color-border);
         border-radius: 20px;
         padding: 0;
         position: relative;
-        transition: all 0.3s;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        /* transition removed */
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8); /* Solid strong shadow */
     }
 
     .chat-container.expanded .chat-orb {
         border-color: var(--color-border-accent);
-        box-shadow:
-            0 8px 30px rgba(0, 0, 0, 0.4),
-            0 0 0 1px rgba(59, 130, 246, 0.1);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.9);
     }
 
     .chat-header {
@@ -474,7 +468,7 @@
 
     .chat-input {
         width: 100%;
-        background: transparent;
+        background: #09090b;
         border: none;
         outline: none;
         resize: none;
@@ -492,7 +486,6 @@
 
     .chat-input::placeholder {
         color: var(--color-text-muted);
-        opacity: 0.7;
     }
 
     .chat-footer {
@@ -501,8 +494,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        opacity: 0.8; /* Dimmed when not focused? Or toggle visibility */
-        transition: opacity 0.2s;
+        /* opacity removed */
     }
 
     /* Optional: hide footer when collapsed? 
@@ -530,7 +522,7 @@
         display: flex;
         align-items: center;
         gap: 6px;
-        background: transparent;
+        background: #09090b;
         border: none;
         color: var(--color-text);
         font-size: 13px;
@@ -549,13 +541,14 @@
         right: 0;
         width: 200px;
         margin-top: 4px;
-        background: var(--color-bg-elevated);
+        background: #09090b;
+        border: 1px solid var(--color-border);
         border-radius: 12px;
         padding: 4px;
         display: flex;
         flex-direction: column;
         gap: 2px;
-        z-index: 50;
+        z-index: 9999;
     }
 
     .mode-option {
@@ -564,7 +557,7 @@
         gap: 10px;
         padding: 8px 12px;
         text-align: left;
-        background: transparent;
+        background: #09090b;
         border: none;
         border-radius: 8px;
         color: var(--color-text-secondary);
@@ -579,9 +572,9 @@
 
     /* Highlight selected option */
     .mode-option.selected {
-        background: rgba(250, 204, 21, 0.1);
+        background: #1e1b00;
         color: var(--color-accent);
-        border: 1px solid rgba(250, 204, 21, 0.2);
+        border: 1px solid var(--color-accent);
     }
 
     .mode-info {
@@ -598,7 +591,7 @@
 
     .mode-desc {
         font-size: 11px;
-        opacity: 0.7;
+        color: var(--color-text-muted);
     }
 
     :global(.text-accent) {
@@ -622,18 +615,18 @@
     .submit-btn:hover:not(:disabled) {
         background: var(--color-accent);
         color: white;
-        border-color: transparent;
+        border-color: var(--color-accent);
     }
 
     .submit-btn:disabled {
-        opacity: 0.5;
+        filter: brightness(0.4);
         cursor: not-allowed;
     }
 
     .spinner {
         width: 14px;
         height: 14px;
-        border: 2px solid rgba(255, 255, 255, 0.3);
+        border: 2px solid #333;
         border-top-color: white;
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
@@ -656,7 +649,7 @@
         display: flex;
         align-items: center;
         gap: 6px;
-        background: transparent;
+        background: #09090b;
         border: none;
         color: var(--color-text-muted);
         padding: 6px;
@@ -672,7 +665,7 @@
 
     .icon-btn.active {
         color: var(--color-accent);
-        background: rgba(59, 130, 246, 0.1);
+        background: #0c1a3d;
     }
 
     .btn-label {
@@ -683,9 +676,8 @@
     .pr-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.4);
+        background: #000000;
         z-index: 99;
-        backdrop-filter: blur(2px);
     }
 
     .pr-config-modal {
@@ -702,7 +694,7 @@
         flex-direction: column;
         gap: 16px;
         z-index: 100;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 20px 50px #000000;
     }
 
     .pr-header {
@@ -715,7 +707,7 @@
     }
 
     .close-btn {
-        background: transparent;
+        background: #09090b;
         border: none;
         color: var(--color-text-muted);
         cursor: pointer;

@@ -1,13 +1,10 @@
 <script lang="ts">
     import { appState } from "$lib/stores.svelte";
-    import { slide } from "svelte/transition";
     import {
         ChevronRight,
         ChevronDown,
         ExternalLink,
         Play,
-        Pencil,
-        X,
         Activity,
         GitPullRequest,
     } from "@lucide/svelte";
@@ -38,9 +35,9 @@
     </button>
 
     {#if expanded}
-        <div class="tasks-container" transition:slide>
+        <div class="tasks-container">
             {#each tasks as task (task.id)}
-                <div class="task-card glass">
+                <div class="task-card">
                     <div class="card-header">
                         <div class="card-title-row">
                             <span
@@ -81,7 +78,7 @@
 
             {#if tasks.length === 0}
                 <div class="empty-state">
-                    <Activity size={24} class="opacity-30 mb-2" />
+                    <Activity size={24} class="text-muted mb-2" />
                     <span>No active tasks</span>
                 </div>
             {/if}
@@ -151,20 +148,20 @@
     }
 
     .task-card {
-        background: var(--color-bg-elevated);
+        background: #09090b; /* Solid hex */
         border: 1px solid var(--color-border);
         border-radius: 12px;
         padding: 16px;
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
-        transition: all 0.2s;
+        /* transition removed */
     }
 
     .task-card:hover {
         border-color: var(--color-border-accent);
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        /* transform removed */
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); /* Stronger shadow */
     }
 
     .card-header {
@@ -198,16 +195,15 @@
 
     .link-icon {
         color: var(--color-text-muted);
-        opacity: 0;
-        transition: opacity 0.2s;
         background: none;
         border: none;
         cursor: pointer;
         padding: 0;
+        transition: color 0.2s;
     }
 
-    .task-card:hover .link-icon {
-        opacity: 1;
+    .link-icon:hover {
+        color: var(--color-text);
     }
 
     .card-meta {
@@ -219,7 +215,7 @@
     }
 
     .repo-tag {
-        background: rgba(255, 255, 255, 0.05);
+        background: #1a1a1a; /* Solid equivalent of 0.05 white on black */
         padding: 2px 6px;
         border-radius: 4px;
     }
@@ -245,13 +241,13 @@
     }
 
     .start-btn {
-        background: rgba(16, 185, 129, 0.1);
+        background: #064e3b; /* Dark solid green (emerald-900 approx) */
         color: var(--color-success);
-        border-color: rgba(16, 185, 129, 0.2);
+        border-color: #065f46;
     }
 
     .start-btn:hover {
-        background: rgba(16, 185, 129, 0.2);
+        background: #065f46; /* Slightly lighter green */
     }
 
     :global(.icon-only) {
@@ -269,7 +265,7 @@
 
     :global(.icon-only.danger:hover) {
         color: var(--color-danger);
-        background: rgba(239, 68, 68, 0.1);
+        background: #450a0a; /* Solid dark red (red-950 approx) */
     }
 
     .empty-state {
@@ -286,8 +282,8 @@
     }
 
     /* Utility classes */
-    :global(.opacity-30) {
-        opacity: 0.3;
+    :global(.text-muted) {
+        color: var(--color-text-muted);
     }
     :global(.mb-2) {
         margin-bottom: 0.5rem;

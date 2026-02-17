@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { slide } from "svelte/transition";
     import { ChevronDown, Check } from "@lucide/svelte";
     import { clickOutside } from "$lib/actions";
     import type { Snippet } from "svelte";
@@ -119,7 +118,7 @@
         align-items: center;
         gap: 8px;
         padding: 6px 10px;
-        background: rgba(255, 255, 255, 0.03);
+        background: var(--color-bg-input);
         border: 1px solid var(--color-border);
         border-radius: 8px;
         color: var(--color-text);
@@ -136,8 +135,8 @@
     }
 
     .dropdown-trigger.variant-ghost {
-        background: transparent;
-        border-color: transparent;
+        background: #09090b;
+        border-color: #09090b;
     }
 
     .dropdown-trigger.variant-ghost:hover:not(:disabled) {
@@ -150,13 +149,13 @@
     }
 
     .dropdown-trigger.variant-ghost.open {
-        background: transparent;
-        border-color: transparent;
+        background: #09090b;
+        border-color: #09090b;
         color: var(--color-text); /* Keep text normal */
     }
 
     .dropdown-trigger:disabled {
-        opacity: 0.5;
+        filter: brightness(0.4);
         cursor: not-allowed;
     }
 
@@ -173,7 +172,7 @@
     }
 
     .chevron {
-        opacity: 0.5;
+        color: var(--color-text-muted);
         transition: transform 0.2s;
         flex-shrink: 0;
     }
@@ -193,11 +192,12 @@
         z-index: 9999;
         background-color: #09090b !important; /* Force opaque dark */
         opacity: 1 !important;
-        backdrop-filter: none !important; /* Ensure no blur/glass */
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
         border: 1px solid var(--color-border);
         border-radius: 8px;
         padding: 4px;
-        box-shadow: var(--shadow-md);
+        box-shadow: 0 10px 40px #000000;
         overflow: hidden;
     }
 
@@ -217,7 +217,7 @@
         justify-content: space-between;
         width: 100%;
         padding: 8px 12px;
-        background: transparent;
+        background: #09090b;
         border: none;
         border-radius: 6px;
         color: var(--color-text-secondary);
@@ -235,9 +235,9 @@
     }
 
     .dropdown-item.selected {
-        background: rgba(250, 204, 21, 0.1);
+        background: #1e1b00;
         color: var(--color-accent);
-        border: 1px solid rgba(250, 204, 21, 0.2);
+        border: 1px solid var(--color-accent);
         font-weight: 500;
     }
 
