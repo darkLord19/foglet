@@ -40,7 +40,7 @@ func (g *Gemini) ExecuteStream(ctx context.Context, req ExecuteRequest, onChunk 
 		}, nil
 	}
 
-	if looksLikeUnsupportedFlag(streamOutput) {
+	if looksLikeUnsupportedFlag(streamOutput) || streamOutput == "" {
 		fallbackArgs := buildGeminiHeadlessArgs(req, false)
 		plainOutput, plainErr := runPlainStreamingCommand(ctx, req.Workdir, cmdName, fallbackArgs, onChunk)
 		return &Result{
