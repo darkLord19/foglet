@@ -41,7 +41,7 @@ func (c *ClaudeCode) ExecuteStream(ctx context.Context, req ExecuteRequest, onCh
 	streamArgs := append(append([]string{}, args...), "--output-format", "stream-json")
 	output, conversationID, err := runJSONStreamingCommand(ctx, req.Workdir, cmdName, streamArgs, onChunk)
 
-	if err != nil && looksLikeUnsupportedFlag(output) {
+	if err != nil && (looksLikeUnsupportedFlag(output) || strings.TrimSpace(output) == "") {
 		plainOutput, plainErr := runPlainStreamingCommand(ctx, req.Workdir, cmdName, args, onChunk)
 		result := &Result{
 			Success:        plainErr == nil,
