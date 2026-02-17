@@ -2,13 +2,15 @@ package runner
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 
 	"github.com/darkLord19/foglet/internal/ai"
+	"github.com/darkLord19/foglet/internal/config"
+	"github.com/darkLord19/foglet/internal/git"
 	"github.com/darkLord19/foglet/internal/state"
 	"github.com/darkLord19/foglet/internal/task"
 )
@@ -161,6 +163,9 @@ func (r *Runner) runAI(t *task.Task) error {
 	// Execute AI
 	result, err := tool.Execute(context.Background(), t.WorktreePath, t.Prompt)
 	if err != nil {
+		if result != nil && result.Output != "" {
+			return fmt.Errorf("AI tool failed: %w\nOutput:\n%s", err, result.Output)
+		}
 		return err
 	}
 
@@ -297,7 +302,9 @@ func (r *Runner) createWorktreePath(repoPath, branch string) (string, error) {
 func (r *Runner) createWorktreePathWithName(repoPath, name, branch string) (string, error) {
 	name = strings.TrimSpace(name)
 	branch = strings.TrimSpace(branch)
-	if !isGitRepo(repoPath) {
+
+	g := git.New(repoPath)
+	if !g.IsRepo() {
 		return "", fmt.Errorf("not a git repository: %s", repoPath)
 	}
 	if name == "" {
@@ -307,34 +314,43 @@ func (r *Runner) createWorktreePathWithName(repoPath, name, branch string) (stri
 		return "", fmt.Errorf("worktree branch is required")
 	}
 
-	cmd := exec.Command("wtx", "add", "--json", name, branch)
-	cmd.Dir = repoPath
-
-	output, err := cmd.CombinedOutput()
+	// Load wtx config to get worktree directory preference
+	cfg, err := config.Load()
 	if err != nil {
-		return "", fmt.Errorf("create worktree: %w\n%s", err, output)
+		return "", fmt.Errorf("load wtx config: %w", err)
 	}
 
-	result, err := parseWtxAddOutput(output)
+	root, err := g.GetRepoRoot()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("get repo root: %w", err)
 	}
-	return result.Path, nil
-}
 
-type wtxAddOutput struct {
-	Name   string `json:"name"`
-	Branch string `json:"branch"`
-	Path   string `json:"path"`
-}
+	// Construct worktree path using wtx config.
+	// WorktreeDir is typically relative to the repo root (default: ../worktrees).
+	// If WorktreeDir is absolute, filepath.Join will use it as-is.
+	worktreePath := filepath.Join(root, cfg.WorktreeDir, name)
 
-func parseWtxAddOutput(raw []byte) (*wtxAddOutput, error) {
-	var out wtxAddOutput
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, fmt.Errorf("parse wtx add output: %w", err)
+	if g.BranchExists(branch) {
+		if err := g.AddWorktree(worktreePath, branch); err != nil {
+			return "", fmt.Errorf("create worktree: %w", err)
+		}
+	} else {
+		startPoint := cfg.DefaultBranch
+
+		// If configured default is not found, try to detect it
+		if !g.BranchExists(startPoint) {
+			if detected, err := g.GetDefaultBranch(); err == nil {
+				startPoint = detected
+			}
+		}
+
+		if startPoint == "" {
+			startPoint = "HEAD"
+		}
+		if err := g.AddWorktreeNewBranch(worktreePath, branch, startPoint); err != nil {
+			return "", fmt.Errorf("create worktree with new branch (start=%s): %w", startPoint, err)
+		}
 	}
-	if strings.TrimSpace(out.Path) == "" {
-		return nil, fmt.Errorf("parse wtx add output: missing path")
-	}
-	return &out, nil
+
+	return worktreePath, nil
 }

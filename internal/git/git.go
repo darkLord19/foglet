@@ -89,3 +89,41 @@ func (g *Git) ListBranches() ([]string, error) {
 	}
 	return branches, nil
 }
+
+// GetDefaultBranch attempts to determine the default branch of the repository.
+func (g *Git) GetDefaultBranch() (string, error) {
+	// 1. Try to get the symbolic ref of HEAD (works for non-bare repos and some bare repos)
+	out, err := g.exec("symbolic-ref", "--short", "HEAD")
+	if err == nil && out != "" {
+		return out, nil
+	}
+
+	// 2. If that fails (e.g. detached HEAD), try to find the remote HEAD
+	out, err = g.exec("symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+	if err == nil && out != "" {
+		// Output looks like "origin/main", we want "main"
+		return strings.TrimPrefix(out, "origin/"), nil
+	}
+
+	// 3. Fallback: list branches and look for main/master
+	branches, err := g.ListBranches()
+	if err != nil {
+		return "", err
+	}
+	for _, b := range branches {
+		if b == "main" {
+			return "main", nil
+		}
+	}
+	for _, b := range branches {
+		if b == "master" {
+			return "master", nil
+		}
+	}
+
+	if len(branches) > 0 {
+		return branches[0], nil
+	}
+
+	return "", fmt.Errorf("could not determine default branch")
+}
