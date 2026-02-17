@@ -648,6 +648,13 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 	)
 	streamWriter.Flush()
 	if err != nil {
+		if strings.TrimSpace(aiOutput) != "" {
+			_ = r.state.AppendRunEvent(state.RunEvent{
+				RunID:   run.ID,
+				Type:    "ai_output",
+				Message: truncate(aiOutput, 8000),
+			})
+		}
 		return fail("ai", err)
 	}
 	if nextConversationID != "" {
@@ -750,13 +757,22 @@ func (r *Runner) runToolWithOptions(
 		Model:          model,
 		ConversationID: conversationID,
 	}, onChunk)
-	if err != nil {
+	if result == nil {
 		return "", "", err
 	}
-	if !result.Success {
-		return "", "", fmt.Errorf("AI execution failed: %s", result.Output)
+
+	output := strings.TrimSpace(result.Output)
+	nextConversationID := strings.TrimSpace(result.ConversationID)
+
+	// When the tool returns an error, preserve any output so the caller can
+	// persist logs for debugging.
+	if err != nil {
+		return output, nextConversationID, err
 	}
-	return strings.TrimSpace(result.Output), strings.TrimSpace(result.ConversationID), nil
+	if !result.Success {
+		return output, nextConversationID, fmt.Errorf("AI execution failed: %s", output)
+	}
+	return output, nextConversationID, nil
 }
 
 func (r *Runner) runShell(ctx context.Context, workdir, cmdline string) error {
