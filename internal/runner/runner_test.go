@@ -8,8 +8,9 @@ import (
 	"testing"
 )
 
-func TestCreateWorktreePathWithNameDetectsDefaultBranch(t *testing.T) {
+func TestCreateWorktreePathWithNameHasExplicitBase(t *testing.T) {
 	repo := initGitRepo(t, "master")
+	baseBranch := "master"
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -17,7 +18,7 @@ func TestCreateWorktreePathWithNameDetectsDefaultBranch(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}
-	// Intentionally set DefaultBranch to a branch that does not exist.
+	// Configuration is loaded but default_branch should be ignored in favor of explicit base.
 	if err := os.WriteFile(cfgPath, []byte(`{"worktree_dir":"../worktrees","default_branch":"main"}`), 0o644); err != nil {
 		t.Fatalf("write config file: %v", err)
 	}
@@ -27,7 +28,7 @@ func TestCreateWorktreePathWithNameDetectsDefaultBranch(t *testing.T) {
 		t.Fatalf("New returned error: %v", err)
 	}
 
-	wtPath, err := r.createWorktreePathWithName(repo, "feature", "feature")
+	wtPath, err := r.createWorktreePathWithName(repo, "feature", "feature", baseBranch)
 	if err != nil {
 		t.Fatalf("createWorktreePathWithName returned error: %v", err)
 	}
@@ -50,6 +51,27 @@ func TestCreateWorktreePathWithNameDetectsDefaultBranch(t *testing.T) {
 	g := gitCmdRepo(t, repo)
 	if !gitBranchExists(g, "feature") {
 		t.Fatal("expected feature branch to exist after worktree creation")
+	}
+}
+
+func TestCreateWorktreePathWithNameAllowsEmptyBaseForExistingBranch(t *testing.T) {
+	repo := initGitRepo(t, "master")
+	runGit(t, repo, "branch", "existing")
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	r, err := New(repo, t.TempDir())
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	wtPath, err := r.createWorktreePathWithName(repo, "existing-wt", "existing", "")
+	if err != nil {
+		t.Fatalf("createWorktreePathWithName returned error: %v", err)
+	}
+	if _, err := os.Stat(wtPath); err != nil {
+		t.Fatalf("expected worktree path to exist: %v", err)
 	}
 }
 

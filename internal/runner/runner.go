@@ -125,7 +125,7 @@ func (r *Runner) createWorktree(repoPath string, t *task.Task) error {
 	t.TransitionTo(task.StateSetup)
 	r.taskStore.Save(t)
 
-	worktreePath, err := r.createWorktreePath(repoPath, t.Branch)
+	worktreePath, err := r.createWorktreePath(repoPath, t.Branch, t.Options.BaseBranch)
 	if err != nil {
 		return err
 	}
@@ -299,13 +299,14 @@ func commandExists(name string) bool {
 	return err == nil
 }
 
-func (r *Runner) createWorktreePath(repoPath, branch string) (string, error) {
-	return r.createWorktreePathWithName(repoPath, branch, branch)
+func (r *Runner) createWorktreePath(repoPath, branch, baseBranch string) (string, error) {
+	return r.createWorktreePathWithName(repoPath, branch, branch, baseBranch)
 }
 
-func (r *Runner) createWorktreePathWithName(repoPath, name, branch string) (string, error) {
+func (r *Runner) createWorktreePathWithName(repoPath, name, branch, baseBranch string) (string, error) {
 	name = strings.TrimSpace(name)
 	branch = strings.TrimSpace(branch)
+	baseBranch = strings.TrimSpace(baseBranch)
 
 	g := git.New(repoPath)
 	if !g.IsRepo() {
@@ -339,20 +340,12 @@ func (r *Runner) createWorktreePathWithName(repoPath, name, branch string) (stri
 			return "", fmt.Errorf("create worktree: %w", err)
 		}
 	} else {
-		startPoint := cfg.DefaultBranch
-
-		// If configured default is not found, try to detect it
-		if !g.BranchExists(startPoint) {
-			if detected, err := g.GetDefaultBranch(); err == nil {
-				startPoint = detected
-			}
+		if baseBranch == "" {
+			return "", fmt.Errorf("base branch is required")
 		}
-
-		if startPoint == "" {
-			startPoint = "HEAD"
-		}
-		if err := g.AddWorktreeNewBranch(worktreePath, branch, startPoint); err != nil {
-			return "", fmt.Errorf("create worktree with new branch (start=%s): %w", startPoint, err)
+		// New branch creation always requires an explicit base
+		if err := g.AddWorktreeNewBranch(worktreePath, branch, baseBranch); err != nil {
+			return "", fmt.Errorf("create worktree with new branch (start=%s): %w", baseBranch, err)
 		}
 	}
 
