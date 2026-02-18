@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -28,45 +29,61 @@ type Repo struct {
 
 var ErrGhNotFound = errors.New("gh CLI not found")
 
+var (
+	execCommand = exec.Command
+	ghPathFn    = ghPath
+)
+
 // IsGhAvailable checks if the gh CLI tool is installed and available in the PATH.
 func IsGhAvailable() bool {
-	return ghPath() != ""
+	return ghPathFn() != ""
 }
 
 // IsGhAuthenticated checks if the user is currently authenticated with GitHub via the gh CLI.
 func IsGhAuthenticated() bool {
 	// "gh auth status" returns exit code 0 if authenticated, non-zero otherwise.
-	gh := ghPath()
+	gh := ghPathFn()
 	if gh == "" {
 		return false
 	}
-	cmd := exec.Command(gh, "auth", "status")
+	cmd := execCommand(gh, "auth", "status")
 	return cmd.Run() == nil
 }
 
 // DiscoverRepos fetches the list of repositories available to the authenticated user.
 func DiscoverRepos() ([]Repo, error) {
-	gh := ghPath()
+	gh := ghPathFn()
 	if gh == "" {
 		return nil, ErrGhNotFound
 	}
 
 	// --json fields: id,name,nameWithOwner,url,isPrivate,defaultBranchRef,owner
-	// --limit 200 to get a reasonable number of recent repos
-	cmd := exec.Command(gh, "repo", "list", "--json", "id,name,nameWithOwner,url,isPrivate,defaultBranchRef,owner", "--limit", "200")
-	output, err := cmd.CombinedOutput()
+	// --limit 200 to get a reasonable number of repos (per owner)
+	const (
+		repoLimit = 200
+		orgLimit  = 100
+		fields    = "id,name,nameWithOwner,url,isPrivate,defaultBranchRef,owner"
+	)
+
+	repos, err := listRepos(gh, "", fields, repoLimit)
 	if err != nil {
-		msg := strings.TrimSpace(string(output))
-		if msg != "" {
-			msg = "\n" + msg
-		}
-		return nil, fmt.Errorf("gh repo list failed: %w%s", err, msg)
+		return nil, err
 	}
 
-	var repos []Repo
-	if err := json.Unmarshal(output, &repos); err != nil {
-		return nil, fmt.Errorf("failed to parse gh repo list output: %w", err)
+	orgs, err := listOrgs(gh, orgLimit)
+	if err != nil {
+		return nil, err
 	}
+
+	for _, org := range orgs {
+		orgRepos, err := listRepos(gh, org, fields, repoLimit)
+		if err != nil {
+			return nil, err
+		}
+		repos = append(repos, orgRepos...)
+	}
+
+	repos = dedupeReposByFullName(repos)
 
 	return repos, nil
 }
@@ -74,13 +91,13 @@ func DiscoverRepos() ([]Repo, error) {
 // CloneRepo clones a repository by its full name (owner/repo) to the destination path.
 // It uses --bare clone as required by the application architecture.
 func CloneRepo(fullName, destPath string) error {
-	gh := ghPath()
+	gh := ghPathFn()
 	if gh == "" {
 		return ErrGhNotFound
 	}
 
 	// gh repo clone <repo> <directory> -- <git-args>
-	cmd := exec.Command(gh, "repo", "clone", fullName, destPath, "--", "--bare")
+	cmd := execCommand(gh, "repo", "clone", fullName, destPath, "--", "--bare")
 
 	// Capture output for error reporting
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -95,6 +112,102 @@ func CloneRepo(fullName, destPath string) error {
 	}
 
 	return nil
+}
+
+func listOrgs(gh string, limit int) ([]string, error) {
+	if limit <= 0 {
+		limit = 30
+	}
+
+	cmd := execCommand(gh, "org", "list", "--limit", strconv.Itoa(limit))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		msg := strings.TrimSpace(string(output))
+		if msg != "" {
+			msg = "\n" + msg
+		}
+		return nil, fmt.Errorf("gh org list failed: %w%s", err, msg)
+	}
+
+	seen := make(map[string]struct{})
+	orgs := make([]string, 0)
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if _, ok := seen[line]; ok {
+			continue
+		}
+		seen[line] = struct{}{}
+		orgs = append(orgs, line)
+	}
+
+	return orgs, nil
+}
+
+func listRepos(gh string, owner string, fields string, limit int) ([]Repo, error) {
+	if fields == "" {
+		fields = "id,name,nameWithOwner,url,isPrivate,defaultBranchRef,owner"
+	}
+	if limit <= 0 {
+		limit = 30
+	}
+
+	args := []string{"repo", "list"}
+	if strings.TrimSpace(owner) != "" {
+		args = append(args, owner)
+	}
+	args = append(args, "--json", fields, "--limit", strconv.Itoa(limit))
+
+	cmd := execCommand(gh, args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		msg := strings.TrimSpace(string(output))
+		if msg != "" {
+			msg = "\n" + msg
+		}
+		if strings.TrimSpace(owner) != "" {
+			return nil, fmt.Errorf("gh repo list %s failed: %w%s", owner, err, msg)
+		}
+		return nil, fmt.Errorf("gh repo list failed: %w%s", err, msg)
+	}
+
+	var repos []Repo
+	if err := json.Unmarshal(output, &repos); err != nil {
+		if strings.TrimSpace(owner) != "" {
+			return nil, fmt.Errorf("failed to parse gh repo list %s output: %w", owner, err)
+		}
+		return nil, fmt.Errorf("failed to parse gh repo list output: %w", err)
+	}
+
+	return repos, nil
+}
+
+func dedupeReposByFullName(repos []Repo) []Repo {
+	seen := make(map[string]struct{}, len(repos))
+	out := make([]Repo, 0, len(repos))
+
+	for _, repo := range repos {
+		fullName := strings.TrimSpace(repo.NameWithOwner)
+		if fullName == "" {
+			// Fallback to URL/ID to avoid accidental duplicates when nameWithOwner is missing.
+			fullName = strings.TrimSpace(repo.URL)
+		}
+		if fullName == "" {
+			fullName = strings.TrimSpace(repo.ID)
+		}
+		if fullName == "" {
+			continue
+		}
+		if _, ok := seen[fullName]; ok {
+			continue
+		}
+		seen[fullName] = struct{}{}
+		out = append(out, repo)
+	}
+
+	return out
 }
 
 func ghPath() string {

@@ -1,0 +1,195 @@
+package ghcli
+
+import (
+	"os"
+	"os/exec"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func TestDiscoverReposIncludesOrgRepos(t *testing.T) {
+	t.Setenv("FOG_GHCLI_TEST_CASE", "success")
+
+	origExec := execCommand
+	origPath := ghPathFn
+	t.Cleanup(func() {
+		execCommand = origExec
+		ghPathFn = origPath
+	})
+
+	ghPathFn = func() string { return "/test/gh" }
+	execCommand = stubExecCommand()
+
+	got, err := DiscoverRepos()
+	if err != nil {
+		t.Fatalf("DiscoverRepos returned error: %v", err)
+	}
+
+	names := make([]string, 0, len(got))
+	for _, repo := range got {
+		names = append(names, repo.NameWithOwner)
+	}
+
+	want := []string{"me/personal", "acme/service", "openai/gpt"}
+	if !reflect.DeepEqual(names, want) {
+		t.Fatalf("unexpected repo list: got %v want %v", names, want)
+	}
+}
+
+func TestDiscoverReposDedupesByFullName(t *testing.T) {
+	t.Setenv("FOG_GHCLI_TEST_CASE", "dedupe")
+
+	origExec := execCommand
+	origPath := ghPathFn
+	t.Cleanup(func() {
+		execCommand = origExec
+		ghPathFn = origPath
+	})
+
+	ghPathFn = func() string { return "/test/gh" }
+	execCommand = stubExecCommand()
+
+	got, err := DiscoverRepos()
+	if err != nil {
+		t.Fatalf("DiscoverRepos returned error: %v", err)
+	}
+
+	names := make([]string, 0, len(got))
+	for _, repo := range got {
+		names = append(names, repo.NameWithOwner)
+	}
+
+	want := []string{"acme/service"}
+	if !reflect.DeepEqual(names, want) {
+		t.Fatalf("unexpected repo list: got %v want %v", names, want)
+	}
+}
+
+func TestDiscoverReposOrgRepoListErrorMentionsOwner(t *testing.T) {
+	t.Setenv("FOG_GHCLI_TEST_CASE", "org_repo_list_error")
+
+	origExec := execCommand
+	origPath := ghPathFn
+	t.Cleanup(func() {
+		execCommand = origExec
+		ghPathFn = origPath
+	})
+
+	ghPathFn = func() string { return "/test/gh" }
+	execCommand = stubExecCommand()
+
+	_, err := DiscoverRepos()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "gh repo list acme failed") {
+		t.Fatalf("expected error to mention owner: %v", err)
+	}
+}
+
+func stubExecCommand() func(string, ...string) *exec.Cmd {
+	return func(name string, args ...string) *exec.Cmd {
+		cs := []string{"-test.run=TestHelperProcess", "--", name}
+		cs = append(cs, args...)
+		cmd := exec.Command(os.Args[0], cs...)
+		cmd.Env = append(os.Environ(), "GO_WANT_HELPER_PROCESS=1")
+		return cmd
+	}
+}
+
+func TestHelperProcess(t *testing.T) {
+	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
+		return
+	}
+
+	args := os.Args
+	sep := -1
+	for i, a := range args {
+		if a == "--" {
+			sep = i
+			break
+		}
+	}
+	if sep == -1 || sep+2 > len(args) {
+		os.Exit(2)
+	}
+
+	// args[sep+1] is the executable path passed to execCommand ("gh" path); ignore it.
+	ghArgs := args[sep+2:]
+	if len(ghArgs) < 2 {
+		os.Exit(2)
+	}
+
+	testCase := os.Getenv("FOG_GHCLI_TEST_CASE")
+	switch ghArgs[0] {
+	case "org":
+		if ghArgs[1] != "list" {
+			os.Exit(2)
+		}
+		switch testCase {
+		case "success":
+			_, _ = os.Stdout.WriteString("acme\nopenai\n\n")
+			os.Exit(0)
+		case "dedupe", "org_repo_list_error":
+			_, _ = os.Stdout.WriteString("acme\n")
+			os.Exit(0)
+		default:
+			os.Exit(2)
+		}
+	case "repo":
+		if ghArgs[1] != "list" {
+			os.Exit(2)
+		}
+
+		// gh repo list [OWNER] --json ... --limit ...
+		owner := ""
+		if len(ghArgs) >= 3 && !strings.HasPrefix(ghArgs[2], "-") {
+			owner = ghArgs[2]
+		}
+
+		switch testCase {
+		case "success":
+			switch owner {
+			case "":
+				_, _ = os.Stdout.WriteString(`[{"id":"R1","name":"personal","nameWithOwner":"me/personal","url":"https://github.com/me/personal","isPrivate":true,"defaultBranchRef":{"name":"main"},"owner":{"login":"me"}}]`)
+				os.Exit(0)
+			case "acme":
+				_, _ = os.Stdout.WriteString(`[{"id":"R2","name":"service","nameWithOwner":"acme/service","url":"https://github.com/acme/service","isPrivate":false,"defaultBranchRef":{"name":"master"},"owner":{"login":"acme"}}]`)
+				os.Exit(0)
+			case "openai":
+				_, _ = os.Stdout.WriteString(`[{"id":"R3","name":"gpt","nameWithOwner":"openai/gpt","url":"https://github.com/openai/gpt","isPrivate":true,"defaultBranchRef":{"name":"main"},"owner":{"login":"openai"}}]`)
+				os.Exit(0)
+			default:
+				os.Exit(2)
+			}
+		case "dedupe":
+			switch owner {
+			case "":
+				_, _ = os.Stdout.WriteString(`[{"id":"R2","name":"service","nameWithOwner":"acme/service","url":"https://github.com/acme/service","isPrivate":false,"defaultBranchRef":{"name":"master"},"owner":{"login":"acme"}}]`)
+				os.Exit(0)
+			case "acme":
+				_, _ = os.Stdout.WriteString(`[{"id":"R2","name":"service","nameWithOwner":"acme/service","url":"https://github.com/acme/service","isPrivate":false,"defaultBranchRef":{"name":"master"},"owner":{"login":"acme"}}]`)
+				os.Exit(0)
+			default:
+				os.Exit(2)
+			}
+		case "org_repo_list_error":
+			switch owner {
+			case "":
+				_, _ = os.Stdout.WriteString(`[]`)
+				os.Exit(0)
+			case "acme":
+				_, _ = os.Stderr.WriteString("boom\n")
+				os.Exit(1)
+			default:
+				os.Exit(2)
+			}
+		default:
+			os.Exit(2)
+		}
+	default:
+		os.Exit(2)
+	}
+}
+
