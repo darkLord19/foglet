@@ -72,7 +72,7 @@ Body:
 - `prompt` (required)
 - `tool` (optional if `default_tool` is configured)
 - `model` (optional)
-- `branch_name` (optional; generated from prompt when omitted)
+- `branch_name` (optional; generated from prompt when omitted, with `-N` suffix on collisions)
 - `autopr` (optional; when true, creates a draft PR via the authenticated GitHub CLI `gh`)
 - `pr_title` (optional; when `autopr` is true and a PR is created, uses this title)
 - `setup_cmd`, `validate`, `validate_cmd`, `base_branch`, `commit_msg` (optional)

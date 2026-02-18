@@ -66,6 +66,10 @@ Import initializes:
 - `~/.fog/repos/<owner>/<repo>/repo.git` (bare)
 - `~/.fog/repos/<owner>/<repo>/base` (base worktree)
 
+Import notes:
+- Imports run multiple clones in parallel to improve onboarding speed.
+- When supported by your Git version, Fog uses blobless partial clones (`--filter=blob:none`) to reduce initial download size; Git may fetch missing blobs later (e.g., when inspecting history).
+
 ## Desktop Sessions (Recommended)
 
 Start the desktop app in dev mode:
@@ -98,6 +102,7 @@ Re-run:
 
 Fork is explicit and starts a new session:
 - branch name is auto-generated from prompt when omitted
+  - if the generated branch name already exists, Fog appends a numeric suffix (`-1`, `-2`, ...) to keep it unique
 - a short context summary is generated from the source session and appended to the fork prompt
 - tool conversation is fresh (no resume), but it receives the summary context
 
