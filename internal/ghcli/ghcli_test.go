@@ -1,6 +1,8 @@
 package ghcli
 
 import (
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"reflect"
@@ -85,6 +87,96 @@ func TestDiscoverReposOrgRepoListErrorMentionsOwner(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "gh repo list acme failed") {
 		t.Fatalf("expected error to mention owner: %v", err)
+	}
+}
+
+func TestCreatePRReturnsURL(t *testing.T) {
+	t.Setenv("FOG_GHCLI_TEST_CASE", "pr_create_success")
+
+	origExec := execCommand
+	origPath := ghPathFn
+	t.Cleanup(func() {
+		execCommand = origExec
+		ghPathFn = origPath
+	})
+
+	ghPathFn = func() string { return "/test/gh" }
+	execCommand = stubExecCommand()
+
+	got, err := CreatePR(t.TempDir(), "my title", "my body", "main", "feature", false)
+	if err != nil {
+		t.Fatalf("CreatePR returned error: %v", err)
+	}
+	if got != "https://example.com/pr/123" {
+		t.Fatalf("unexpected PR URL: got %q", got)
+	}
+}
+
+func TestCreatePRDraftAddsDraftFlag(t *testing.T) {
+	t.Setenv("FOG_GHCLI_TEST_CASE", "pr_create_draft")
+
+	origExec := execCommand
+	origPath := ghPathFn
+	t.Cleanup(func() {
+		execCommand = origExec
+		ghPathFn = origPath
+	})
+
+	ghPathFn = func() string { return "/test/gh" }
+	execCommand = stubExecCommand()
+
+	got, err := CreatePR(t.TempDir(), "my title", "my body", "main", "feature", true)
+	if err != nil {
+		t.Fatalf("CreatePR returned error: %v", err)
+	}
+	if got != "https://example.com/pr/123" {
+		t.Fatalf("unexpected PR URL: got %q", got)
+	}
+}
+
+func TestCreatePRWithContextBuildsArgsAndWrapsOutput(t *testing.T) {
+	origProcRun := procRun
+	origPath := ghPathFn
+	t.Cleanup(func() {
+		procRun = origProcRun
+		ghPathFn = origPath
+	})
+
+	ghPathFn = func() string { return "/test/gh" }
+
+	var gotDir, gotName string
+	var gotArgs []string
+	sentinel := errors.New("boom")
+	procRun = func(ctx context.Context, dir, name string, args ...string) ([]byte, error) {
+		gotDir = dir
+		gotName = name
+		gotArgs = append([]string(nil), args...)
+		return []byte("nope\n"), sentinel
+	}
+
+	_, err := CreatePRWithContext(context.Background(), "/repo", "my title", "my body", "main", "feature", true)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected error to wrap sentinel: %v", err)
+	}
+	if !strings.Contains(err.Error(), "gh pr create failed") {
+		t.Fatalf("expected error to include command context: %v", err)
+	}
+	if !strings.Contains(err.Error(), "nope") {
+		t.Fatalf("expected error to include output: %v", err)
+	}
+	if gotDir != "/repo" {
+		t.Fatalf("unexpected dir: got %q", gotDir)
+	}
+	if gotName != "/test/gh" {
+		t.Fatalf("unexpected command: got %q", gotName)
+	}
+
+	wantArgs := []string{"pr", "create", "--base", "main", "--head", "feature", "--title", "my title", "--body", "my body", "--draft"}
+	if !reflect.DeepEqual(gotArgs, wantArgs) {
+		t.Fatalf("unexpected args: got %v want %v", gotArgs, wantArgs)
 	}
 }
 
@@ -188,8 +280,33 @@ func TestHelperProcess(t *testing.T) {
 		default:
 			os.Exit(2)
 		}
+	case "pr":
+		if ghArgs[1] != "create" {
+			os.Exit(2)
+		}
+		hasDraft := false
+		for _, a := range ghArgs[2:] {
+			if a == "--draft" {
+				hasDraft = true
+			}
+		}
+		switch testCase {
+		case "pr_create_success":
+			if hasDraft {
+				os.Exit(2)
+			}
+			_, _ = os.Stdout.WriteString("https://example.com/pr/123\n")
+			os.Exit(0)
+		case "pr_create_draft":
+			if !hasDraft {
+				os.Exit(2)
+			}
+			_, _ = os.Stdout.WriteString("https://example.com/pr/123\n")
+			os.Exit(0)
+		default:
+			os.Exit(2)
+		}
 	default:
 		os.Exit(2)
 	}
 }
-

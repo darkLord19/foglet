@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/darkLord19/foglet/internal/ai"
+	"github.com/darkLord19/foglet/internal/ghcli"
 	"github.com/darkLord19/foglet/internal/proc"
 	"github.com/darkLord19/foglet/internal/state"
 	"github.com/darkLord19/foglet/internal/task"
@@ -1040,7 +1041,7 @@ func (r *Runner) pushBranch(ctx context.Context, workdir, branch string, setUpst
 }
 
 func (r *Runner) createDraftPR(ctx context.Context, workdir, baseBranch, branch, prompt, tool, sessionID, customTitle string) (string, error) {
-	if !commandExists("gh") {
+	if !ghcli.IsGhAvailable() {
 		return "", fmt.Errorf("gh CLI not available")
 	}
 	title := resolvePRTitle(customTitle, prompt)
@@ -1049,20 +1050,8 @@ func (r *Runner) createDraftPR(ctx context.Context, workdir, baseBranch, branch,
 		tool,
 		strings.TrimSpace(prompt),
 	)
-	output, err := proc.Run(
-		ctx,
-		workdir,
-		"gh", "pr", "create",
-		"--draft",
-		"--base", baseBranch,
-		"--head", branch,
-		"--title", title,
-		"--body", body,
-	)
-	if err != nil {
-		return "", fmt.Errorf("create draft PR failed: %w", withOutput(err, output))
-	}
-	return strings.TrimSpace(string(output)), nil
+
+	return ghcli.CreatePRWithContext(ctx, workdir, title, body, baseBranch, branch, true)
 }
 
 func (r *Runner) setRunPhase(sessionID, runID, phase string) error {

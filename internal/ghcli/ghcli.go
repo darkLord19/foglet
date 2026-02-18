@@ -1,6 +1,7 @@
 package ghcli
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/darkLord19/foglet/internal/proc"
 )
 
 // Repo represents a GitHub repository as returned by gh repo list
@@ -32,6 +35,7 @@ var ErrGhNotFound = errors.New("gh CLI not found")
 var (
 	execCommand = exec.Command
 	ghPathFn    = ghPath
+	procRun     = proc.Run
 )
 
 // IsGhAvailable checks if the gh CLI tool is installed and available in the PATH.
@@ -268,4 +272,72 @@ func fallbackBinDirs() []string {
 		out = append(out, dir)
 	}
 	return out
+}
+
+// CreatePR creates a pull request for the repository at repoPath.
+func CreatePR(repoPath, title, body, base, head string, draft bool) (string, error) {
+	gh := ghPathFn()
+	if gh == "" {
+		return "", ErrGhNotFound
+	}
+
+	args := []string{"pr", "create",
+		"--base", base,
+		"--head", head,
+		"--title", title,
+		"--body", body,
+	}
+	if draft {
+		args = append(args, "--draft")
+	}
+
+	cmd := execCommand(gh, args...)
+	cmd.Dir = repoPath
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		msg := strings.TrimSpace(string(output))
+		if len(msg) > 4096 {
+			msg = msg[:4096] + "..."
+		}
+		if msg != "" {
+			msg = "\n" + msg
+		}
+		return "", fmt.Errorf("gh pr create failed: %w%s", err, msg)
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+// CreatePRWithContext creates a pull request for the repository at repoPath and
+// allows the operation to be canceled via ctx.
+func CreatePRWithContext(ctx context.Context, repoPath, title, body, base, head string, draft bool) (string, error) {
+	gh := ghPathFn()
+	if gh == "" {
+		return "", ErrGhNotFound
+	}
+
+	args := []string{"pr", "create",
+		"--base", base,
+		"--head", head,
+		"--title", title,
+		"--body", body,
+	}
+	if draft {
+		args = append(args, "--draft")
+	}
+
+	output, err := procRun(ctx, repoPath, gh, args...)
+	if err != nil {
+		msg := strings.TrimSpace(string(output))
+		if len(msg) > 4096 {
+			msg = msg[:4096] + "..."
+		}
+		if msg != "" {
+			msg = "\n" + msg
+		}
+		return "", fmt.Errorf("gh pr create failed: %w%s", err, msg)
+	}
+
+	return strings.TrimSpace(string(output)), nil
 }
