@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -65,6 +66,44 @@ func TestDiscoverReposDedupesByFullName(t *testing.T) {
 	want := []string{"acme/service"}
 	if !reflect.DeepEqual(names, want) {
 		t.Fatalf("unexpected repo list: got %v want %v", names, want)
+	}
+}
+
+func TestCloneRepoUsesBloblessFilter(t *testing.T) {
+	t.Setenv("FOG_GHCLI_TEST_CASE", "clone_success_filter")
+
+	origExec := execCommand
+	origPath := ghPathFn
+	t.Cleanup(func() {
+		execCommand = origExec
+		ghPathFn = origPath
+	})
+
+	ghPathFn = func() string { return "/test/gh" }
+	execCommand = stubExecCommand()
+
+	destPath := filepath.Join(t.TempDir(), "repo.git")
+	if err := CloneRepo("acme/service", destPath); err != nil {
+		t.Fatalf("CloneRepo returned error: %v", err)
+	}
+}
+
+func TestCloneRepoFallsBackWhenFilterUnsupported(t *testing.T) {
+	t.Setenv("FOG_GHCLI_TEST_CASE", "clone_fallback")
+
+	origExec := execCommand
+	origPath := ghPathFn
+	t.Cleanup(func() {
+		execCommand = origExec
+		ghPathFn = origPath
+	})
+
+	ghPathFn = func() string { return "/test/gh" }
+	execCommand = stubExecCommand()
+
+	destPath := filepath.Join(t.TempDir(), "repo.git")
+	if err := CloneRepo("acme/service", destPath); err != nil {
+		t.Fatalf("CloneRepo returned error: %v", err)
 	}
 }
 
@@ -230,48 +269,85 @@ func TestHelperProcess(t *testing.T) {
 			os.Exit(2)
 		}
 	case "repo":
-		if ghArgs[1] != "list" {
-			os.Exit(2)
-		}
+		switch ghArgs[1] {
+		case "list":
+			// gh repo list [OWNER] --json ... --limit ...
+			owner := ""
+			if len(ghArgs) >= 3 && !strings.HasPrefix(ghArgs[2], "-") {
+				owner = ghArgs[2]
+			}
 
-		// gh repo list [OWNER] --json ... --limit ...
-		owner := ""
-		if len(ghArgs) >= 3 && !strings.HasPrefix(ghArgs[2], "-") {
-			owner = ghArgs[2]
-		}
-
-		switch testCase {
-		case "success":
-			switch owner {
-			case "":
-				_, _ = os.Stdout.WriteString(`[{"id":"R1","name":"personal","nameWithOwner":"me/personal","url":"https://github.com/me/personal","isPrivate":true,"defaultBranchRef":{"name":"main"},"owner":{"login":"me"}}]`)
-				os.Exit(0)
-			case "acme":
-				_, _ = os.Stdout.WriteString(`[{"id":"R2","name":"service","nameWithOwner":"acme/service","url":"https://github.com/acme/service","isPrivate":false,"defaultBranchRef":{"name":"master"},"owner":{"login":"acme"}}]`)
-				os.Exit(0)
-			case "openai":
-				_, _ = os.Stdout.WriteString(`[{"id":"R3","name":"gpt","nameWithOwner":"openai/gpt","url":"https://github.com/openai/gpt","isPrivate":true,"defaultBranchRef":{"name":"main"},"owner":{"login":"openai"}}]`)
-				os.Exit(0)
+			switch testCase {
+			case "success":
+				switch owner {
+				case "":
+					_, _ = os.Stdout.WriteString(`[{"id":"R1","name":"personal","nameWithOwner":"me/personal","url":"https://github.com/me/personal","isPrivate":true,"defaultBranchRef":{"name":"main"},"owner":{"login":"me"}}]`)
+					os.Exit(0)
+				case "acme":
+					_, _ = os.Stdout.WriteString(`[{"id":"R2","name":"service","nameWithOwner":"acme/service","url":"https://github.com/acme/service","isPrivate":false,"defaultBranchRef":{"name":"master"},"owner":{"login":"acme"}}]`)
+					os.Exit(0)
+				case "openai":
+					_, _ = os.Stdout.WriteString(`[{"id":"R3","name":"gpt","nameWithOwner":"openai/gpt","url":"https://github.com/openai/gpt","isPrivate":true,"defaultBranchRef":{"name":"main"},"owner":{"login":"openai"}}]`)
+					os.Exit(0)
+				default:
+					os.Exit(2)
+				}
+			case "dedupe":
+				switch owner {
+				case "":
+					_, _ = os.Stdout.WriteString(`[{"id":"R2","name":"service","nameWithOwner":"acme/service","url":"https://github.com/acme/service","isPrivate":false,"defaultBranchRef":{"name":"master"},"owner":{"login":"acme"}}]`)
+					os.Exit(0)
+				case "acme":
+					_, _ = os.Stdout.WriteString(`[{"id":"R2","name":"service","nameWithOwner":"acme/service","url":"https://github.com/acme/service","isPrivate":false,"defaultBranchRef":{"name":"master"},"owner":{"login":"acme"}}]`)
+					os.Exit(0)
+				default:
+					os.Exit(2)
+				}
+			case "org_repo_list_error":
+				switch owner {
+				case "":
+					_, _ = os.Stdout.WriteString(`[]`)
+					os.Exit(0)
+				case "acme":
+					_, _ = os.Stderr.WriteString("boom\n")
+					os.Exit(1)
+				default:
+					os.Exit(2)
+				}
 			default:
 				os.Exit(2)
 			}
-		case "dedupe":
-			switch owner {
-			case "":
-				_, _ = os.Stdout.WriteString(`[{"id":"R2","name":"service","nameWithOwner":"acme/service","url":"https://github.com/acme/service","isPrivate":false,"defaultBranchRef":{"name":"master"},"owner":{"login":"acme"}}]`)
-				os.Exit(0)
-			case "acme":
-				_, _ = os.Stdout.WriteString(`[{"id":"R2","name":"service","nameWithOwner":"acme/service","url":"https://github.com/acme/service","isPrivate":false,"defaultBranchRef":{"name":"master"},"owner":{"login":"acme"}}]`)
-				os.Exit(0)
-			default:
+		case "clone":
+			if len(ghArgs) < 4 {
 				os.Exit(2)
 			}
-		case "org_repo_list_error":
-			switch owner {
-			case "":
-				_, _ = os.Stdout.WriteString(`[]`)
+			hasBare := false
+			hasFilter := false
+			for _, a := range ghArgs[4:] {
+				if a == "--bare" {
+					hasBare = true
+				}
+				if a == "--filter=blob:none" {
+					hasFilter = true
+				}
+			}
+			if !hasBare {
+				os.Exit(2)
+			}
+
+			switch testCase {
+			case "clone_success_filter":
+				if !hasFilter {
+					os.Exit(2)
+				}
 				os.Exit(0)
-			case "acme":
+			case "clone_fallback":
+				if hasFilter {
+					_, _ = os.Stderr.WriteString("error: unknown option `--filter=blob:none`\n")
+					os.Exit(1)
+				}
+				os.Exit(0)
+			case "clone_fail":
 				_, _ = os.Stderr.WriteString("boom\n")
 				os.Exit(1)
 			default:

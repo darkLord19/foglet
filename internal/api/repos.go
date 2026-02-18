@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,10 +11,12 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	fogenv "github.com/darkLord19/foglet/internal/env"
 	"github.com/darkLord19/foglet/internal/ghcli"
 	"github.com/darkLord19/foglet/internal/state"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -22,6 +25,7 @@ var (
 	runGitCommandFn     = runGitCommand
 	isGhAvailableFn     = ghcli.IsGhAvailable
 	isGhAuthenticatedFn = ghcli.IsGhAuthenticated
+	ghcliCloneRepoFn    = ghcli.CloneRepo
 	repoSegmentPattern  = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 )
 
@@ -158,45 +162,81 @@ func importSelectedRepos(fogHome string, store *state.Store, repos []ghcli.Repo)
 		return nil, fmt.Errorf("create managed repos dir: %w", err)
 	}
 
-	imported := make([]string, 0, len(repos))
-	for _, repo := range repos {
-		fullName, err := canonicalRepoName(repo)
-		if err != nil {
-			return nil, err
-		}
-		owner, name, err := splitRepoFullName(fullName)
-		if err != nil {
-			return nil, err
-		}
+	imported := make([]string, len(repos))
+	var storeMu sync.Mutex
 
-		repoDir := filepath.Join(managedReposDir, owner, name)
-		if err := os.MkdirAll(repoDir, 0o755); err != nil {
-			return nil, fmt.Errorf("create repo dir %s: %w", repoDir, err)
-		}
-		barePath := filepath.Join(repoDir, "repo.git")
-		basePath := filepath.Join(repoDir, "base")
+	// Use errgroup to limit concurrency
+	g, ctx := errgroup.WithContext(context.Background())
+	g.SetLimit(5) // Limit to 5 concurrent clones
 
-		if err := ensureBareRepoInitialized(repo, barePath, basePath); err != nil {
-			return nil, err
-		}
+	for i, repo := range repos {
+		i, repo := i, repo // capture loop variables
+		g.Go(func() error {
+			// Check for context cancellation
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 
-		host := repoHost(repo.URL)
-		if _, err := store.UpsertRepo(state.Repo{
-			Name:             fullName,
-			URL:              repo.URL,
-			Host:             host,
-			Owner:            owner,
-			Repo:             name,
-			BarePath:         barePath,
-			BaseWorktreePath: basePath,
-			DefaultBranch:    repo.DefaultBranchRef.Name,
-		}); err != nil {
-			return nil, err
-		}
-		imported = append(imported, fullName)
+			fullName, err := canonicalRepoName(repo)
+			if err != nil {
+				return err
+			}
+			owner, name, err := splitRepoFullName(fullName)
+			if err != nil {
+				return err
+			}
+
+			repoDir := filepath.Join(managedReposDir, owner, name)
+			if err := os.MkdirAll(repoDir, 0o755); err != nil {
+				return fmt.Errorf("create repo dir %s: %w", repoDir, err)
+			}
+			barePath := filepath.Join(repoDir, "repo.git")
+			basePath := filepath.Join(repoDir, "base")
+
+			if err := ensureBareRepoInitialized(repo, barePath, basePath); err != nil {
+				return err
+			}
+
+			host := repoHost(repo.URL)
+
+			storeMu.Lock()
+			_, err = store.UpsertRepo(state.Repo{
+				Name:             fullName,
+				URL:              repo.URL,
+				Host:             host,
+				Owner:            owner,
+				Repo:             name,
+				BarePath:         barePath,
+				BaseWorktreePath: basePath,
+				DefaultBranch:    repo.DefaultBranchRef.Name,
+			})
+			storeMu.Unlock()
+
+			if err != nil {
+				return err
+			}
+			imported[i] = fullName
+			return nil
+		})
 	}
 
-	return imported, nil
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	// Filter out any empty strings if some failed (though errgroup returns first error, cancellation might leave gaps)
+	// In this implementation, any error aborts the whole operation, so we just return the successfully gathered names if no error.
+	// However, if we wanted partial success, we'd need a different structure. For now, strict failure is fine as per original contract.
+
+	// Re-slice to remove empty slots if any (shouldn't be if no error, but good practice)
+	finalImported := make([]string, 0, len(imported))
+	for _, name := range imported {
+		if name != "" {
+			finalImported = append(finalImported, name)
+		}
+	}
+
+	return finalImported, nil
 }
 
 func canonicalRepoName(repo ghcli.Repo) (string, error) {
@@ -246,17 +286,45 @@ func splitRepoFullName(fullName string) (owner string, name string, err error) {
 }
 
 func ensureBareRepoInitialized(repo ghcli.Repo, barePath, basePath string) error {
-	if _, err := os.Stat(barePath); errorsIsNotExist(err) {
+	clone := func() error {
 		// Use gh repo clone via ghcli package
 		// We pass FullName (owner/repo)
-		if err := ghcli.CloneRepo(repo.NameWithOwner, barePath); err != nil {
+		if err := ghcliCloneRepoFn(repo.NameWithOwner, barePath); err != nil {
 			return fmt.Errorf("clone bare repository %s: %w", repo.NameWithOwner, err)
+		}
+		return nil
+	}
+
+	recloned := false
+	if _, err := os.Stat(barePath); errorsIsNotExist(err) {
+		// Does not exist, proceed to clone
+		if err := clone(); err != nil {
+			return err
 		}
 	} else if err != nil {
 		return fmt.Errorf("check bare repo path %s: %w", barePath, err)
+	} else {
+		// Exists, verify validity
+		if err := verifyGitRepo(barePath); err != nil {
+			// Invalid, remove and re-clone
+			// We can use os.RemoveAll which handles non-empty directories
+			if removeErr := os.RemoveAll(barePath); removeErr != nil {
+				return fmt.Errorf("failed to remove invalid repo %s: %w (original error: %v)", barePath, removeErr, err)
+			}
+			// If the bare repo is invalid, any existing base worktree is also unusable (it points into the bare repo).
+			// Remove it so we can recreate a consistent base worktree below.
+			if removeErr := os.RemoveAll(basePath); removeErr != nil {
+				return fmt.Errorf("failed to remove invalid base worktree %s: %w", basePath, removeErr)
+			}
+			if err := clone(); err != nil {
+				return err
+			}
+			recloned = true
+		}
 	}
 
 	if _, err := os.Stat(basePath); errorsIsNotExist(err) {
+		// Create base worktree from the bare repo.
 		if err := os.MkdirAll(filepath.Dir(basePath), 0o755); err != nil {
 			return fmt.Errorf("create base worktree parent: %w", err)
 		}
@@ -265,6 +333,22 @@ func ensureBareRepoInitialized(repo ghcli.Repo, barePath, basePath string) error
 		}
 	} else if err != nil {
 		return fmt.Errorf("check base worktree path %s: %w", basePath, err)
+	} else if recloned {
+		// Bare repo was recreated, so the old base worktree should have been removed. If it still exists, recreate it.
+		if err := os.RemoveAll(basePath); err != nil {
+			return fmt.Errorf("remove base worktree after reclone %s: %w", basePath, err)
+		}
+		if err := runGitCommandFn("--git-dir", barePath, "worktree", "add", basePath); err != nil {
+			return fmt.Errorf("recreate base worktree for %s: %w", repo.NameWithOwner, err)
+		}
+	} else if err := verifyGitWorktree(basePath); err != nil {
+		// Base exists but is not a valid worktree (commonly due to interrupted setup). Recreate it.
+		if removeErr := os.RemoveAll(basePath); removeErr != nil {
+			return fmt.Errorf("failed to remove invalid base worktree %s: %w (original error: %v)", basePath, removeErr, err)
+		}
+		if err := runGitCommandFn("--git-dir", barePath, "worktree", "add", basePath); err != nil {
+			return fmt.Errorf("recreate base worktree for %s: %w", repo.NameWithOwner, err)
+		}
 	}
 
 	return nil
@@ -292,4 +376,12 @@ func repoHost(cloneURL string) string {
 		return "github.com"
 	}
 	return u.Host
+}
+
+func verifyGitRepo(path string) error {
+	return runGitCommandFn("--git-dir", path, "rev-parse", "--git-dir")
+}
+
+func verifyGitWorktree(path string) error {
+	return runGitCommandFn("-C", path, "rev-parse", "--git-dir")
 }

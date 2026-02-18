@@ -100,11 +100,7 @@ func CloneRepo(fullName, destPath string) error {
 		return ErrGhNotFound
 	}
 
-	// gh repo clone <repo> <directory> -- <git-args>
-	cmd := execCommand(gh, "repo", "clone", fullName, destPath, "--", "--bare")
-
-	// Capture output for error reporting
-	if output, err := cmd.CombinedOutput(); err != nil {
+	formatOutput := func(output []byte) string {
 		msg := strings.TrimSpace(string(output))
 		if len(msg) > 4096 {
 			msg = msg[:4096] + "..."
@@ -112,10 +108,33 @@ func CloneRepo(fullName, destPath string) error {
 		if msg != "" {
 			msg = "\n" + msg
 		}
-		return fmt.Errorf("gh repo clone failed: %w%s", err, msg)
+		return msg
 	}
 
-	return nil
+	// gh repo clone <repo> <directory> -- <git-args>
+	// Prefer a blobless filter for faster imports on large repos.
+	args := []string{"repo", "clone", fullName, destPath, "--", "--bare", "--filter=blob:none"}
+	cmd := execCommand(gh, args...)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+
+	// Some environments ship an older git that doesn't support --filter.
+	// Retry without the filter in that case.
+	msgLower := strings.ToLower(string(output))
+	if strings.Contains(msgLower, "--filter") && strings.Contains(msgLower, "unknown option") {
+		if removeErr := os.RemoveAll(destPath); removeErr != nil {
+			return fmt.Errorf("cleanup failed after clone retry: %w", removeErr)
+		}
+		cmd = execCommand(gh, "repo", "clone", fullName, destPath, "--", "--bare")
+		output, err = cmd.CombinedOutput()
+		if err == nil {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("gh repo clone failed: %w%s", err, formatOutput(output))
 }
 
 func listOrgs(gh string, limit int) ([]string, error) {
