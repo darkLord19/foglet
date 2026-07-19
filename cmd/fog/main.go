@@ -5,14 +5,11 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/darkLord19/foglet/internal/env"
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
-	"github.com/darkLord19/foglet/internal/task"
 	"github.com/darkLord19/foglet/internal/toolcfg"
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -70,9 +67,9 @@ Example:
 
 var listCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all tasks",
+	Short: "List all sessions",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := listTasks(); err != nil {
+		if err := listSessions(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -80,11 +77,11 @@ var listCmd = &cobra.Command{
 }
 
 var statusCmd = &cobra.Command{
-	Use:   "status <task-id>",
-	Short: "Show task status",
+	Use:   "status <session-id>",
+	Short: "Show session status",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := showStatus(args[0]); err != nil {
+		if err := showSessionStatus(args[0]); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -103,7 +100,7 @@ func init() {
 	// run command flags
 	runCmd.Flags().StringVar(&flagBranch, "branch", "", "Branch name (required)")
 	runCmd.Flags().StringVar(&flagRepo, "repo", "", "Target repository (owner/repo; imported automatically when missing)")
-	runCmd.Flags().StringVar(&flagTool, "tool", "", "AI tool to use (cursor, claude, gemini, aider)")
+	runCmd.Flags().StringVar(&flagTool, "tool", "", "AI tool to use (cursor, claude, gemini)")
 	runCmd.Flags().StringVar(&flagPrompt, "prompt", "", "Task prompt (required)")
 	runCmd.Flags().BoolVar(&flagCommit, "commit", false, "Commit changes after AI completes")
 	runCmd.Flags().BoolVar(&flagPR, "pr", false, "Create pull request")
@@ -127,12 +124,10 @@ func init() {
 }
 
 func runTask() error {
-	// Get config dir
 	fogHome, err := env.FogHome()
 	if err != nil {
 		return err
 	}
-	configDir := fogHome
 
 	stateStore, err := state.NewStore(fogHome)
 	if err != nil {
@@ -159,80 +154,83 @@ func runTask() error {
 	}
 
 	// Create runner
-	r, err := runner.New(repo.BaseWorktreePath, configDir)
+	r, err := runner.New(repo.BaseWorktreePath, fogHome, stateStore)
 	if err != nil {
 		return err
 	}
-	r.SetStateStore(stateStore)
 
-	// Create task
-	t := &task.Task{
-		ID:        uuid.New().String(),
-		State:     task.StateCreated,
-		Branch:    flagBranch,
-		Prompt:    flagPrompt,
-		AITool:    resolvedTool,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		Options: task.Options{
-			Commit:      flagCommit,
-			CreatePR:    flagPR,
-			Validate:    flagValidate,
-			BaseBranch:  flagBaseBranch,
-			SetupCmd:    flagSetupCmd,
-			ValidateCmd: flagValidateCmd,
-			Async:       flagAsync,
-			PRTitle:     flagPRTitle,
-		},
+	baseBranch := strings.TrimSpace(flagBaseBranch)
+	if baseBranch == "" {
+		baseBranch = strings.TrimSpace(repo.DefaultBranch)
+	}
+	if baseBranch == "" {
+		baseBranch = "main"
 	}
 
-	fmt.Printf("Starting task %s\n", t.ID)
-	fmt.Printf("Branch: %s\n", t.Branch)
-	fmt.Printf("AI Tool: %s\n", t.AITool)
-	fmt.Printf("Prompt: %s\n", t.Prompt)
+	opts := runner.StartSessionOptions{
+		RepoName:    repo.Name,
+		RepoPath:    repo.BaseWorktreePath,
+		Branch:      flagBranch,
+		Tool:        resolvedTool,
+		Model:       "",
+		Prompt:      flagPrompt,
+		AutoPR:      flagPR,
+		SetupCmd:    flagSetupCmd,
+		Validate:    flagValidate,
+		ValidateCmd: flagValidateCmd,
+		BaseBranch:  baseBranch,
+		CommitMsg:   "",
+		PRTitle:     flagPRTitle,
+	}
+
+	fmt.Printf("Starting session\n")
+	fmt.Printf("Branch: %s\n", opts.Branch)
+	fmt.Printf("AI Tool: %s\n", opts.Tool)
+	fmt.Printf("Prompt: %s\n", opts.Prompt)
 	fmt.Println()
 
-	// Execute
-	if err := r.Execute(t); err != nil {
-		return fmt.Errorf("task execution failed: %w", err)
+	session, run, err := r.StartSession(opts)
+	if err != nil {
+		return fmt.Errorf("session execution failed: %w", err)
 	}
 
 	fmt.Println()
-	fmt.Printf("✅ Task completed in %v\n", t.Duration())
-	fmt.Printf("State: %s\n", t.State)
-	fmt.Printf("Worktree: %s\n", t.WorktreePath)
+	fmt.Printf("✅ Session completed\n")
+	fmt.Printf("Run state: %s\n", run.State)
+	fmt.Printf("Branch: %s\n", session.Branch)
+	fmt.Printf("Worktree: %s\n", session.WorktreePath)
 
-	if prURL, ok := t.Metadata["pr_url"].(string); ok {
-		fmt.Printf("PR: %s\n", prURL)
+	if session.PRURL != "" {
+		fmt.Printf("PR: %s\n", session.PRURL)
 	}
 
 	return nil
 }
 
-func listTasks() error {
+func listSessions() error {
 	fogHome, err := env.FogHome()
 	if err != nil {
 		return err
 	}
-	configDir := fogHome
 
-	cwd, err := os.Getwd()
+	stateStore, err := state.NewStore(fogHome)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = stateStore.Close() }()
+
+	r, err := runner.New("", fogHome, stateStore)
 	if err != nil {
 		return err
 	}
 
-	r, err := runner.New(cwd, configDir)
-	if err != nil {
-		return err
-	}
-
-	tasks, err := r.ListTasks()
+	sessions, err := r.ListSessions()
 	if err != nil {
 		return err
 	}
 
 	if flagJSON {
-		data, err := json.MarshalIndent(tasks, "", "  ")
+		data, err := json.MarshalIndent(sessions, "", "  ")
 		if err != nil {
 			return err
 		}
@@ -240,65 +238,79 @@ func listTasks() error {
 		return nil
 	}
 
-	if len(tasks) == 0 {
-		fmt.Println("No tasks found")
+	if len(sessions) == 0 {
+		fmt.Println("No sessions found")
 		return nil
 	}
 
-	fmt.Printf("%-36s %-15s %-20s %s\n", "ID", "STATE", "BRANCH", "CREATED")
+	fmt.Printf("%-36s %-15s %-20s %s\n", "ID", "STATUS", "BRANCH", "CREATED")
 	fmt.Println(string(make([]byte, 100)))
 
-	for _, t := range tasks {
+	for _, s := range sessions {
 		fmt.Printf("%-36s %-15s %-20s %s\n",
-			t.ID,
-			t.State,
-			t.Branch,
-			t.CreatedAt.Format("2006-01-02 15:04"))
+			s.ID,
+			s.Status,
+			s.Branch,
+			s.CreatedAt.Format("2006-01-02 15:04"))
 	}
 
 	return nil
 }
 
-func showStatus(id string) error {
+func showSessionStatus(id string) error {
 	fogHome, err := env.FogHome()
 	if err != nil {
 		return err
 	}
-	configDir := fogHome
 
-	cwd, err := os.Getwd()
+	stateStore, err := state.NewStore(fogHome)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = stateStore.Close() }()
+
+	r, err := runner.New("", fogHome, stateStore)
 	if err != nil {
 		return err
 	}
 
-	r, err := runner.New(cwd, configDir)
+	session, found, err := r.GetSession(id)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("session not found: %s", id)
+	}
+
+	runs, err := r.ListSessionRuns(id)
 	if err != nil {
 		return err
 	}
 
-	t, err := r.GetTask(id)
-	if err != nil {
-		return err
+	fmt.Printf("Session: %s\n", session.ID)
+	fmt.Printf("Status: %s\n", session.Status)
+	fmt.Printf("Repo: %s\n", session.RepoName)
+	fmt.Printf("Branch: %s\n", session.Branch)
+	fmt.Printf("AI Tool: %s\n", session.Tool)
+	fmt.Printf("AutoPR: %v\n", session.AutoPR)
+	fmt.Printf("Created: %s\n", session.CreatedAt.Format("2006-01-02 15:04:05"))
+
+	if session.WorktreePath != "" {
+		fmt.Printf("Worktree: %s\n", session.WorktreePath)
+	}
+	if session.PRURL != "" {
+		fmt.Printf("PR: %s\n", session.PRURL)
 	}
 
-	fmt.Printf("Task: %s\n", t.ID)
-	fmt.Printf("State: %s\n", t.State)
-	fmt.Printf("Branch: %s\n", t.Branch)
-	fmt.Printf("AI Tool: %s\n", t.AITool)
-	fmt.Printf("Prompt: %s\n", t.Prompt)
-	fmt.Printf("Created: %s\n", t.CreatedAt.Format("2006-01-02 15:04:05"))
-	fmt.Printf("Duration: %v\n", t.Duration())
-
-	if t.WorktreePath != "" {
-		fmt.Printf("Worktree: %s\n", t.WorktreePath)
-	}
-
-	if t.Error != "" {
-		fmt.Printf("Error: %s\n", t.Error)
-	}
-
-	if prURL, ok := t.Metadata["pr_url"].(string); ok {
-		fmt.Printf("PR: %s\n", prURL)
+	if len(runs) > 0 {
+		fmt.Println()
+		fmt.Printf("Runs (%d):\n", len(runs))
+		for _, run := range runs {
+			fmt.Printf("  - %s: %s (%s)\n", run.ID[:8], run.State, run.Prompt)
+			if run.Error != "" {
+				fmt.Printf("    Error: %s\n", run.Error)
+			}
+		}
 	}
 
 	return nil

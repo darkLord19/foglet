@@ -4,15 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
-	"github.com/darkLord19/foglet/internal/task"
 	"github.com/darkLord19/foglet/internal/toolcfg"
-	"github.com/google/uuid"
 )
 
 // Handler handles Slack slash commands and interactions.
@@ -76,45 +73,77 @@ func (h *Handler) HandleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t, repoPath, err := h.buildTask(parsed)
+	opts, err := h.buildSessionOptions(parsed)
 	if err != nil {
 		h.sendErrorResponse(w, err.Error())
 		return
 	}
 
-	t.Options.SlackChannel = cmd.ChannelID
-	t.Options.Async = true
+	session, run, err := h.runner.StartSessionAsync(opts)
+	if err != nil {
+		h.sendErrorResponse(w, err.Error())
+		return
+	}
 
-	h.sendAckResponse(w, t)
+	// Store Slack metadata as a run event for thread context lookup
+	if h.stateStore != nil {
+		_ = h.stateStore.AppendRunEvent(state.RunEvent{
+			RunID: run.ID,
+			Type:  "slack_metadata",
+			Data:  fmt.Sprintf(`{"channel_id":"%s","root_ts":"%s","repo":"%s"}`, cmd.ChannelID, "", opts.RepoName),
+		})
+	}
+
+	h.sendAckResponse(w, session, run)
 
 	go func() {
-		if err := h.runner.ExecuteInRepo(repoPath, t); err != nil {
-			h.sendCompletionNotification(cmd.ResponseURL, t, err)
-			return
+		// Poll for run completion
+		for {
+			time.Sleep(2 * time.Second)
+			if h.stateStore == nil {
+				return
+			}
+			currentRun, found, err := h.stateStore.GetRun(run.ID)
+			if err != nil || !found {
+				return
+			}
+			if isTerminalRunState(currentRun.State) {
+				session, _, _ := h.stateStore.GetSession(session.ID)
+				h.sendCompletionNotification(cmd.ResponseURL, &session, &currentRun)
+				return
+			}
 		}
-		h.sendCompletionNotification(cmd.ResponseURL, t, nil)
 	}()
 }
 
-func (h *Handler) buildTask(parsed *parsedCommand) (*task.Task, string, error) {
+func isTerminalRunState(state string) bool {
+	switch strings.TrimSpace(state) {
+	case "COMPLETED", "FAILED", "CANCELLED":
+		return true
+	default:
+		return false
+	}
+}
+
+func (h *Handler) buildSessionOptions(parsed *parsedCommand) (runner.StartSessionOptions, error) {
 	if h.stateStore == nil {
-		return nil, "", fmt.Errorf("state store is not configured")
+		return runner.StartSessionOptions{}, fmt.Errorf("state store is not configured")
 	}
 
 	repo, found, err := h.stateStore.GetRepoByName(parsed.Repo)
 	if err != nil {
-		return nil, "", err
+		return runner.StartSessionOptions{}, err
 	}
 	if !found {
-		return nil, "", fmt.Errorf("unknown repo: %s", parsed.Repo)
+		return runner.StartSessionOptions{}, fmt.Errorf("unknown repo: %s", parsed.Repo)
 	}
 	if strings.TrimSpace(repo.BaseWorktreePath) == "" {
-		return nil, "", fmt.Errorf("repo %s has no base worktree path", parsed.Repo)
+		return runner.StartSessionOptions{}, fmt.Errorf("repo %s has no base worktree path", parsed.Repo)
 	}
 
 	tool, err := toolcfg.ResolveTool(parsed.Tool, h.stateStore, "slack")
 	if err != nil {
-		return nil, "", err
+		return runner.StartSessionOptions{}, err
 	}
 
 	branch := strings.TrimSpace(parsed.BranchName)
@@ -127,10 +156,7 @@ func (h *Handler) buildTask(parsed *parsedCommand) (*task.Task, string, error) {
 	}
 
 	if isProtectedBranch(branch) {
-		return nil, "", fmt.Errorf("protected branch %q is not allowed", branch)
-	}
-	if !isValidBranchName(repo.BaseWorktreePath, branch) {
-		return nil, "", fmt.Errorf("invalid branch name: %s", branch)
+		return runner.StartSessionOptions{}, fmt.Errorf("protected branch %q is not allowed", branch)
 	}
 
 	baseBranch := strings.TrimSpace(repo.DefaultBranch)
@@ -138,38 +164,27 @@ func (h *Handler) buildTask(parsed *parsedCommand) (*task.Task, string, error) {
 		baseBranch = "main"
 	}
 
-	t := &task.Task{
-		ID:        uuid.New().String(),
-		State:     task.StateCreated,
-		Branch:    branch,
-		Prompt:    parsed.Prompt,
-		AITool:    tool,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-		Options: task.Options{
-			Commit:     true,
-			CreatePR:   parsed.AutoPR,
-			Validate:   false,
-			BaseBranch: baseBranch,
-			CommitMsg:  parsed.CommitMsg,
-		},
-	}
-
-	if parsed.Model != "" {
-		t.Metadata = map[string]any{"model": parsed.Model}
-	}
-
-	return t, repo.BaseWorktreePath, nil
+	return runner.StartSessionOptions{
+		RepoName:   repo.Name,
+		RepoPath:   repo.BaseWorktreePath,
+		Branch:     branch,
+		Tool:       tool,
+		Model:      parsed.Model,
+		Prompt:     parsed.Prompt,
+		AutoPR:     parsed.AutoPR,
+		BaseBranch: baseBranch,
+		CommitMsg:  parsed.CommitMsg,
+	}, nil
 }
 
 // sendAckResponse sends immediate acknowledgment.
-func (h *Handler) sendAckResponse(w http.ResponseWriter, t *task.Task) {
+func (h *Handler) sendAckResponse(w http.ResponseWriter, session state.Session, run state.Run) {
 	response := map[string]any{
 		"response_type": "in_channel",
-		"text":          fmt.Sprintf("🚀 Starting task on branch `%s`", t.Branch),
+		"text":          fmt.Sprintf("🚀 Starting session on branch `%s`", session.Branch),
 		"attachments": []map[string]any{
 			{
-				"text":  t.Prompt,
+				"text":  run.Prompt,
 				"color": "good",
 			},
 		},
@@ -191,80 +206,59 @@ func (h *Handler) sendErrorResponse(w http.ResponseWriter, errorMsg string) {
 }
 
 // sendCompletionNotification sends completion notification to Slack.
-func (h *Handler) sendCompletionNotification(responseURL string, t *task.Task, err error) {
-	var message map[string]any
-
-	if err != nil {
-		message = map[string]any{
-			"response_type": "in_channel",
-			"text":          fmt.Sprintf("❌ Task failed: %s", t.Branch),
-			"attachments": []map[string]any{
-				{
-					"text":  err.Error(),
-					"color": "danger",
-				},
-			},
+func (h *Handler) sendCompletionNotification(responseURL string, session *state.Session, run *state.Run) {
+	switch {
+	case run.State == "FAILED" || run.State == "CANCELLED":
+		text := fmt.Sprintf("❌ Session %s: `%s`", run.State, session.Branch)
+		if run.Error != "" {
+			text += "\n" + run.Error
 		}
-	} else {
-		duration := t.Duration()
+		message := map[string]any{
+			"response_type": "in_channel",
+			"text":          text,
+		}
+		payload, _ := json.Marshal(message)
+		_, _ = http.Post(responseURL, "application/json", strings.NewReader(string(payload)))
+
+	default:
+		duration := ""
+		if run.CompletedAt != nil {
+			duration = run.CompletedAt.Sub(run.CreatedAt).Round(time.Second).String()
+		}
+
+		fields := []map[string]any{
+			{"title": "Branch", "value": session.Branch, "short": true},
+		}
+		if duration != "" {
+			fields = append(fields, map[string]any{"title": "Duration", "value": duration, "short": true})
+		}
+		if session.PRURL != "" {
+			fields = append(fields, map[string]any{"title": "Pull Request", "value": session.PRURL, "short": false})
+		}
 
 		attachment := map[string]any{
-			"color": "good",
-			"fields": []map[string]any{
+			"color":  "good",
+			"fields": fields,
+		}
+
+		if session.WorktreePath != "" {
+			attachment["actions"] = []map[string]any{
 				{
-					"title": "Branch",
-					"value": t.Branch,
-					"short": true,
+					"type":  "button",
+					"text":  "Open Branch",
+					"url":   fmt.Sprintf("vscode://file/%s", session.WorktreePath),
+					"style": "primary",
 				},
-				{
-					"title": "Duration",
-					"value": duration.String(),
-					"short": true,
-				},
-			},
+			}
 		}
 
-		if prURL, ok := t.Metadata["pr_url"].(string); ok {
-			attachment["fields"] = append(attachment["fields"].([]map[string]any), map[string]any{
-				"title": "Pull Request",
-				"value": prURL,
-				"short": false,
-			})
-		}
-
-		actions := []map[string]any{
-			{
-				"type":  "button",
-				"text":  "Open Branch",
-				"url":   fmt.Sprintf("vscode://file/%s", t.WorktreePath),
-				"style": "primary",
-			},
-		}
-
-		if _, ok := t.Metadata["pr_url"]; !ok {
-			actions = append(actions, map[string]any{
-				"type":  "button",
-				"text":  "Create PR",
-				"name":  "create_pr",
-				"value": t.ID,
-				"style": "default",
-			})
-		}
-
-		attachment["actions"] = actions
-
-		message = map[string]any{
+		message := map[string]any{
 			"response_type": "in_channel",
-			"text":          fmt.Sprintf("✅ Task completed: %s", t.Branch),
+			"text":          fmt.Sprintf("✅ Session completed: `%s`", session.Branch),
 			"attachments":   []map[string]any{attachment},
 		}
+
+		payload, _ := json.Marshal(message)
+		_, _ = http.Post(responseURL, "application/json", strings.NewReader(string(payload)))
 	}
-
-	payload, _ := json.Marshal(message)
-	_, _ = http.Post(responseURL, "application/json", strings.NewReader(string(payload)))
-}
-
-func isValidBranchName(repoPath, branch string) bool {
-	cmd := exec.Command("git", "-C", repoPath, "check-ref-format", "--branch", branch)
-	return cmd.Run() == nil
 }

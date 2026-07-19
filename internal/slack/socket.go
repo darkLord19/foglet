@@ -14,7 +14,6 @@ import (
 
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
-	"github.com/darkLord19/foglet/internal/task"
 	"github.com/gorilla/websocket"
 )
 
@@ -170,21 +169,45 @@ func (s *SocketMode) handleSlashEnvelope(raw json.RawMessage) {
 		return
 	}
 
-	t, repoPath, err := s.handler.buildTask(parsed)
+	opts, err := s.handler.buildSessionOptions(parsed)
 	if err != nil {
 		s.sendWebhookError(payload.ResponseURL, err.Error())
 		return
 	}
 
-	t.Options.SlackChannel = payload.ChannelID
-	t.Options.Async = true
-	attachSlackMetadata(t, parsed.Repo, payload.ChannelID, "")
+	session, run, err := s.handler.runner.StartSessionAsync(opts)
+	if err != nil {
+		s.sendWebhookError(payload.ResponseURL, err.Error())
+		return
+	}
 
-	s.sendWebhookAck(payload.ResponseURL, t)
+	// Store Slack metadata as a run event for thread context lookup
+	if s.handler.stateStore != nil {
+		_ = s.handler.stateStore.AppendRunEvent(state.RunEvent{
+			RunID: run.ID,
+			Type:  "slack_metadata",
+			Data:  fmt.Sprintf(`{"channel_id":"%s","root_ts":"%s","repo":"%s"}`, payload.ChannelID, "", opts.RepoName),
+		})
+	}
+
+	s.sendWebhookAck(payload.ResponseURL, session, run)
 
 	go func() {
-		err := s.handler.runner.ExecuteInRepo(repoPath, t)
-		s.handler.sendCompletionNotification(payload.ResponseURL, t, err)
+		for {
+			time.Sleep(2 * time.Second)
+			if s.handler.stateStore == nil {
+				return
+			}
+			currentRun, found, err := s.handler.stateStore.GetRun(run.ID)
+			if err != nil || !found {
+				return
+			}
+			if isTerminalRunState(currentRun.State) {
+				currentSession, _, _ := s.handler.stateStore.GetSession(session.ID)
+				s.handler.sendCompletionNotification(payload.ResponseURL, &currentSession, &currentRun)
+				return
+			}
+		}
 	}()
 }
 
@@ -227,17 +250,28 @@ func (s *SocketMode) handleEventsEnvelope(raw json.RawMessage) {
 		return
 	}
 
-	t, repoPath, err := s.handler.buildTask(parsed)
+	opts, err := s.handler.buildSessionOptions(parsed)
 	if err != nil {
 		_, _ = s.postMessage(evt.Channel, rootTS, fmt.Sprintf("❌ %s", err.Error()))
 		return
 	}
 
-	t.Options.SlackChannel = evt.Channel
-	t.Options.Async = true
-	attachSlackMetadata(t, parsed.Repo, evt.Channel, rootTS)
+	session, run, err := s.handler.runner.StartSessionAsync(opts)
+	if err != nil {
+		_, _ = s.postMessage(evt.Channel, rootTS, fmt.Sprintf("❌ %s", err.Error()))
+		return
+	}
 
-	s.runTaskInThread(evt.Channel, rootTS, repoPath, t)
+	// Store Slack metadata for thread context lookup
+	if s.handler.stateStore != nil {
+		_ = s.handler.stateStore.AppendRunEvent(state.RunEvent{
+			RunID: run.ID,
+			Type:  "slack_metadata",
+			Data:  fmt.Sprintf(`{"channel_id":"%s","root_ts":"%s","repo":"%s"}`, evt.Channel, rootTS, opts.RepoName),
+		})
+	}
+
+	s.runSessionInThread(evt.Channel, rootTS, session, run)
 }
 
 func (s *SocketMode) handleThreadFollowUp(channelID, rootTS, rawPrompt string) {
@@ -247,62 +281,74 @@ func (s *SocketMode) handleThreadFollowUp(channelID, rootTS, rawPrompt string) {
 		return
 	}
 
-	ctx, found, err := findLatestThreadContext(s.handler.runner, channelID, rootTS)
+	sessionID, found, err := findLatestSessionForThread(s.handler.runner, s.handler.stateStore, channelID, rootTS)
 	if err != nil {
 		_, _ = s.postMessage(channelID, rootTS, fmt.Sprintf("❌ %s", err.Error()))
 		return
 	}
 	if !found {
-		_, _ = s.postMessage(channelID, rootTS, "❌ Could not find a prior Fog task in this thread. Start with `@fog [repo='name'] prompt`.")
+		_, _ = s.postMessage(channelID, rootTS, "❌ Could not find a prior Fog session in this thread. Start with `@fog [repo='name'] prompt`.")
 		return
 	}
 
-	parsed := &parsedCommand{
-		Repo:   ctx.Repo,
-		Tool:   ctx.Tool,
-		Prompt: prompt,
-	}
-
-	t, repoPath, err := s.handler.buildTask(parsed)
+	// Continue the existing session with the follow-up prompt
+	run, err := s.handler.runner.ContinueSessionAsync(sessionID, prompt)
 	if err != nil {
 		_, _ = s.postMessage(channelID, rootTS, fmt.Sprintf("❌ %s", err.Error()))
 		return
 	}
 
-	// Follow-ups run from the previous task's worktree so the new branch starts
-	// from the latest thread context, while preserving worktree isolation.
-	execRepoPath := repoPath
-	if strings.TrimSpace(ctx.WorktreePath) != "" {
-		execRepoPath = strings.TrimSpace(ctx.WorktreePath)
-	}
-
-	t.Options.SlackChannel = channelID
-	t.Options.Async = true
-	attachSlackMetadata(t, ctx.Repo, channelID, rootTS)
-	if t.Metadata == nil {
-		t.Metadata = map[string]any{}
-	}
-	t.Metadata["parent_task_id"] = ctx.TaskID
-	t.Metadata["parent_branch"] = ctx.Branch
-
-	s.runTaskInThread(channelID, rootTS, execRepoPath, t)
-}
-
-func (s *SocketMode) runTaskInThread(channelID, rootTS, repoPath string, t *task.Task) {
-	start := fmt.Sprintf("🚀 Starting task on branch `%s`\n%s", t.Branch, t.Prompt)
+	start := fmt.Sprintf("🚀 Continuing session with: %s", prompt)
 	_, _ = s.postMessage(channelID, rootTS, start)
 
 	go func() {
-		err := s.handler.runner.ExecuteInRepo(repoPath, t)
-		msg := completionText(t, err)
-		_, _ = s.postMessage(channelID, rootTS, msg)
+		for {
+			time.Sleep(2 * time.Second)
+			if s.handler.stateStore == nil {
+				return
+			}
+			currentRun, found, err := s.handler.stateStore.GetRun(run.ID)
+			if err != nil || !found {
+				return
+			}
+			if isTerminalRunState(currentRun.State) {
+				session, _, _ := s.handler.stateStore.GetSession(sessionID)
+				msg := completionTextFromSession(&session, &currentRun)
+				_, _ = s.postMessage(channelID, rootTS, msg)
+				return
+			}
+		}
 	}()
 }
 
-func (s *SocketMode) sendWebhookAck(responseURL string, t *task.Task) {
+func (s *SocketMode) runSessionInThread(channelID, rootTS string, session state.Session, run state.Run) {
+	start := fmt.Sprintf("🚀 Starting session on branch `%s`\n%s", session.Branch, run.Prompt)
+	_, _ = s.postMessage(channelID, rootTS, start)
+
+	go func() {
+		for {
+			time.Sleep(2 * time.Second)
+			if s.handler.stateStore == nil {
+				return
+			}
+			currentRun, found, err := s.handler.stateStore.GetRun(run.ID)
+			if err != nil || !found {
+				return
+			}
+			if isTerminalRunState(currentRun.State) {
+				currentSession, _, _ := s.handler.stateStore.GetSession(session.ID)
+				msg := completionTextFromSession(&currentSession, &currentRun)
+				_, _ = s.postMessage(channelID, rootTS, msg)
+				return
+			}
+		}
+	}()
+}
+
+func (s *SocketMode) sendWebhookAck(responseURL string, session state.Session, run state.Run) {
 	response := map[string]any{
 		"response_type": "in_channel",
-		"text":          fmt.Sprintf("🚀 Starting task on branch `%s`", t.Branch),
+		"text":          fmt.Sprintf("🚀 Starting session on branch `%s`", session.Branch),
 	}
 	_ = postWebhookJSON(s.httpClient, responseURL, response)
 }
@@ -399,84 +445,66 @@ func normalizeFollowUpPrompt(input string) (string, error) {
 	return prompt, nil
 }
 
-func attachSlackMetadata(t *task.Task, repoName, channelID, rootTS string) {
-	if t.Metadata == nil {
-		t.Metadata = map[string]any{}
-	}
-	t.Metadata["repo"] = repoName
-	if strings.TrimSpace(channelID) != "" {
-		t.Metadata["slack_channel_id"] = channelID
-	}
-	if strings.TrimSpace(rootTS) != "" {
-		t.Metadata["slack_root_ts"] = rootTS
-	}
-}
-
-func completionText(t *task.Task, err error) string {
-	if err != nil {
-		return fmt.Sprintf("❌ Task failed: `%s`\n%s", t.Branch, err.Error())
+func completionTextFromSession(session *state.Session, run *state.Run) string {
+	if run.State == "FAILED" || run.State == "CANCELLED" {
+		msg := fmt.Sprintf("❌ Session %s: `%s`", run.State, session.Branch)
+		if run.Error != "" {
+			msg += "\n" + run.Error
+		}
+		return msg
 	}
 
-	msg := fmt.Sprintf("✅ Task completed: `%s` (%s)", t.Branch, t.Duration().Round(time.Second))
-	if prURL, ok := t.Metadata["pr_url"].(string); ok && strings.TrimSpace(prURL) != "" {
-		msg += "\nPR: " + prURL
+	duration := ""
+	if run.CompletedAt != nil {
+		duration = run.CompletedAt.Sub(run.CreatedAt).Round(time.Second).String()
+	}
+	msg := fmt.Sprintf("✅ Session completed: `%s` (%s)", session.Branch, duration)
+	if session.PRURL != "" {
+		msg += "\nPR: " + session.PRURL
 	}
 	return msg
 }
 
-type threadContext struct {
-	TaskID       string
-	Repo         string
-	Tool         string
-	Branch       string
-	WorktreePath string
-}
+func findLatestSessionForThread(r *runner.Runner, store *state.Store, channelID, rootTS string) (string, bool, error) {
+	if store == nil {
+		return "", false, nil
+	}
 
-func findLatestThreadContext(r *runner.Runner, channelID, rootTS string) (threadContext, bool, error) {
-	tasks, err := r.ListTasks()
+	sessions, err := r.ListSessions()
 	if err != nil {
-		return threadContext{}, false, err
+		return "", false, err
 	}
-	ctx, found := findLatestThreadContextFromTasks(tasks, channelID, rootTS)
-	return ctx, found, nil
-}
 
-func findLatestThreadContextFromTasks(tasks []*task.Task, channelID, rootTS string) (threadContext, bool) {
-	for _, t := range tasks {
-		if strings.TrimSpace(t.Options.SlackChannel) != strings.TrimSpace(channelID) {
+	for _, session := range sessions {
+		runs, err := store.ListRuns(session.ID)
+		if err != nil {
 			continue
 		}
-		if strings.TrimSpace(metadataValue(t, "slack_root_ts")) != strings.TrimSpace(rootTS) {
-			continue
+		for _, run := range runs {
+			events, err := store.ListRunEvents(run.ID, 200)
+			if err != nil {
+				continue
+			}
+			for _, event := range events {
+				if event.Type != "slack_metadata" {
+					continue
+				}
+				var md struct {
+					ChannelID string `json:"channel_id"`
+					RootTS    string `json:"root_ts"`
+				}
+				if err := json.Unmarshal([]byte(event.Data), &md); err != nil {
+					continue
+				}
+				if md.ChannelID == channelID && md.RootTS == rootTS {
+					return session.ID, true, nil
+				}
+			}
+			// Only check the first (latest) run — metadata is always on run 0
+			break
 		}
-		repo := strings.TrimSpace(metadataValue(t, "repo"))
-		if repo == "" {
-			continue
-		}
-		return threadContext{
-			TaskID:       t.ID,
-			Repo:         repo,
-			Tool:         strings.TrimSpace(t.AITool),
-			Branch:       strings.TrimSpace(t.Branch),
-			WorktreePath: strings.TrimSpace(t.WorktreePath),
-		}, true
 	}
-	return threadContext{}, false
-}
-
-func metadataValue(t *task.Task, key string) string {
-	if t == nil || t.Metadata == nil {
-		return ""
-	}
-	raw, ok := t.Metadata[key]
-	if !ok {
-		return ""
-	}
-	out, ok := raw.(string)
-	if !ok {
-		return ""
-	}
-	return out
+	return "", false, nil
 }
 
 type socketEnvelope struct {
