@@ -91,6 +91,16 @@ func (g *Git) ListBranches() ([]string, error) {
 	return branches, nil
 }
 
+// Diff returns the full patch for a diff reference (e.g. "main...feature").
+func (g *Git) Diff(ref string) (string, error) {
+	return g.exec("diff", "--no-color", ref)
+}
+
+// DiffStat returns the diff stat for a diff reference.
+func (g *Git) DiffStat(ref string) (string, error) {
+	return g.exec("diff", "--stat", "--no-color", ref)
+}
+
 // GetDefaultBranch attempts to determine the default branch of the repository.
 func (g *Git) GetDefaultBranch() (string, error) {
 	// 1. Try to get the symbolic ref of HEAD (works for non-bare repos and some bare repos)

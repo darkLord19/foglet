@@ -23,7 +23,7 @@ func TestCreateWorktreePathWithNameHasExplicitBase(t *testing.T) {
 		t.Fatalf("write config file: %v", err)
 	}
 
-	r, err := New(repo, t.TempDir())
+	r, err := New(repo, t.TempDir(), nil)
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestCreateWorktreePathWithNameAllowsEmptyBaseForExistingBranch(t *testing.T
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	r, err := New(repo, t.TempDir())
+	r, err := New(repo, t.TempDir(), nil)
 	if err != nil {
 		t.Fatalf("New returned error: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestNewAllowsNonRepoPath(t *testing.T) {
 	storeDir := t.TempDir()
 	nonRepo := t.TempDir()
 
-	r, err := New(nonRepo, storeDir)
+	r, err := New(nonRepo, storeDir, nil)
 	if err != nil {
 		t.Fatalf("New returned error for non-repo path: %v", err)
 	}
