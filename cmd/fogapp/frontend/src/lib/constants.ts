@@ -11,7 +11,7 @@ export const TOOL_MODELS: Record<string, string[]> = {
         "sonnet-4.5-thinking",
         "gpt-5.3-codex"
     ],
-    gemini: [
+    antigravity: [
         "auto",
         "gemini-3-pro-preview",
         "gemini-3-flash-preview",

@@ -26,7 +26,7 @@ A session is a long-lived branch/worktree "conversation" that you can follow up 
 Fog executes tools you already installed:
 - `claude` / `claude-code`
 - `cursor` (requires `cursor-agent` binary)
-- `gemini`
+- `antigravity` (requires `agy` binary)
 
 Adapters prefer headless/streaming modes when available and fall back to plain output when needed.
 

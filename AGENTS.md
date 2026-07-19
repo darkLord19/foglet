@@ -4,7 +4,7 @@ Fog turns your local machine into a "personal cloud" for AI coding agents.
 
 This repo is intentionally local-first:
 - Fog does not host an LLM.
-- Fog runs existing AI coding CLIs (Cursor Agent, Claude Code, Gemini CLI) on the user's machine.
+- Fog runs existing AI coding CLIs (Cursor Agent, Claude Code, Antigravity CLI) on the user's machine.
 - Isolation and auditability come from Git worktrees and Git history.
 
 ## Product Principles
@@ -103,7 +103,7 @@ Adapters live in `internal/ai/*` and must:
 Supported tools (canonical names):
 - `claude` (also accepts `claude-code`)
 - `cursor`
-- `gemini`
+- `antigravity` (also accepts `agy`; binary `agy` or `antigravity`)
 
 Tool detection notes:
 - GUI-launched processes on macOS can have a limited PATH.
@@ -198,7 +198,7 @@ Use a dev home dir to avoid polluting real state:
 
 - Wrong behavior after code changes is often an old `fogd` process/binary.
   - Check port owner: `lsof -nP -iTCP:8080 -sTCP:LISTEN`
-  - Confirm binary content: `strings bin/fogd | rg gemini`
+  - Confirm binary content: `strings bin/fogd | rg antigravity`
 - Tool not detected in desktop:
   - verify `GET /api/settings` includes `available_tools`
   - remember desktop UI caches settings until reload.

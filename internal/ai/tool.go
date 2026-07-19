@@ -49,8 +49,8 @@ func GetTool(name string) (Tool, error) {
 		return &Cursor{}, nil
 	case "claude", "claude-code":
 		return &ClaudeCode{}, nil
-	case "gemini":
-		return &Gemini{}, nil
+	case "antigravity", "agy":
+		return &Antigravity{}, nil
 	default:
 		return nil, fmt.Errorf("unknown AI tool: %s", name)
 	}
@@ -61,7 +61,7 @@ func DetectTool(preferred string) (Tool, error) {
 	tools := []Tool{
 		&Cursor{},
 		&ClaudeCode{},
-		&Gemini{},
+		&Antigravity{},
 	}
 
 	// Try preferred first
@@ -84,7 +84,7 @@ func DetectTool(preferred string) (Tool, error) {
 
 // AvailableToolNames returns canonical tool names supported by Fog.
 func AvailableToolNames() []string {
-	return []string{"cursor", "claude", "gemini"}
+	return []string{"cursor", "claude", "antigravity"}
 }
 
 // ExecuteWithOptionalStream runs a tool and streams chunks when supported.

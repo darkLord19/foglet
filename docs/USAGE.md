@@ -23,7 +23,7 @@ go install github.com/darkLord19/foglet/cmd/{wtx,fog,fogd,fogcloud,fogapp}@lates
 Fog needs:
 - GitHub CLI (`gh`) installed and authenticated to discover/import repos
 - a default AI tool to run when you omit `tool`
-- at least one installed supported AI CLI (`claude`, `cursor-agent`, or `gemini`)
+- at least one installed supported AI CLI (`claude`, `cursor-agent`, or `agy`)
 
 ```bash
 fog setup
@@ -36,7 +36,7 @@ What it does:
 You can also set values explicitly:
 
 ```bash
-fog config set --default-tool gemini --branch-prefix fog
+fog config set --default-tool antigravity --branch-prefix fog
 ```
 
 Desktop onboarding wizard:
@@ -124,7 +124,7 @@ The desktop app uses SSE for active runs and polling as a fallback.
 fog run \
   --repo owner/repo \
   --branch fog/jwt-auth \
-  --tool gemini \
+  --tool antigravity \
   --prompt "Add JWT auth" \
   --commit \
   --pr \
@@ -136,7 +136,7 @@ fog run \
 Fog executes tools you already installed:
 - `claude` / `claude-code`
 - `agent`
-- `gemini`
+- `antigravity` (requires `agy` binary)
 
 Adapters prefer headless/streaming modes when available and fall back to plain output when needed.
 

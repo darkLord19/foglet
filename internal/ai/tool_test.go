@@ -4,13 +4,23 @@ import "slices"
 
 import "testing"
 
-func TestGetToolGemini(t *testing.T) {
-	tool, err := GetTool("gemini")
+func TestGetToolAntigravity(t *testing.T) {
+	tool, err := GetTool("antigravity")
 	if err != nil {
 		t.Fatalf("GetTool returned error: %v", err)
 	}
-	if tool.Name() != "gemini" {
-		t.Fatalf("unexpected tool name: got %q want %q", tool.Name(), "gemini")
+	if tool.Name() != "antigravity" {
+		t.Fatalf("unexpected tool name: got %q want %q", tool.Name(), "antigravity")
+	}
+}
+
+func TestGetToolAntigravityAlias(t *testing.T) {
+	tool, err := GetTool("agy")
+	if err != nil {
+		t.Fatalf("GetTool returned error: %v", err)
+	}
+	if tool.Name() != "antigravity" {
+		t.Fatalf("unexpected tool name: got %q want %q", tool.Name(), "antigravity")
 	}
 }
 
@@ -24,10 +34,10 @@ func TestGetToolClaudeAlias(t *testing.T) {
 	}
 }
 
-func TestAvailableToolNamesIncludesGemini(t *testing.T) {
+func TestAvailableToolNamesIncludesAntigravity(t *testing.T) {
 	names := AvailableToolNames()
-	found := slices.Contains(names, "gemini")
+	found := slices.Contains(names, "antigravity")
 	if !found {
-		t.Fatalf("expected gemini in available tool names: %v", names)
+		t.Fatalf("expected antigravity in available tool names: %v", names)
 	}
 }

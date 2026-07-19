@@ -13,7 +13,7 @@ Desktop (optional, for `fogapp` dev/build):
 
 Helpful tools (optional):
 - `gh` for PR creation flows
-- an AI tool: `claude`/`claude-code`, `cursor-agent`, or `gemini`
+- an AI tool: `claude`/`claude-code`, `cursor-agent`, or `antigravity` (`agy`)
 
 ## Build
 

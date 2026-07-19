@@ -100,7 +100,7 @@ func init() {
 	// run command flags
 	runCmd.Flags().StringVar(&flagBranch, "branch", "", "Branch name (required)")
 	runCmd.Flags().StringVar(&flagRepo, "repo", "", "Target repository (owner/repo; imported automatically when missing)")
-	runCmd.Flags().StringVar(&flagTool, "tool", "", "AI tool to use (cursor, claude, gemini)")
+	runCmd.Flags().StringVar(&flagTool, "tool", "", "AI tool to use (cursor, claude, antigravity)")
 	runCmd.Flags().StringVar(&flagPrompt, "prompt", "", "Task prompt (required)")
 	runCmd.Flags().BoolVar(&flagCommit, "commit", false, "Commit changes after AI completes")
 	runCmd.Flags().BoolVar(&flagPR, "pr", false, "Create pull request")

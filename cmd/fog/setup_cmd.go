@@ -30,7 +30,7 @@ var setupCmd = &cobra.Command{
 }
 
 func init() {
-	setupCmd.Flags().StringVar(&setupDefaultToolFlag, "default-tool", "", "Default AI tool (cursor, claude, gemini)")
+	setupCmd.Flags().StringVar(&setupDefaultToolFlag, "default-tool", "", "Default AI tool (cursor, claude, antigravity)")
 	rootCmd.AddCommand(setupCmd)
 }
 
@@ -57,7 +57,7 @@ func runSetup() error {
 
 	available := availableTools()
 	if len(available) == 0 {
-		return fmt.Errorf("no supported AI tools found in PATH (expected cursor, claude, or gemini)")
+		return fmt.Errorf("no supported AI tools found in PATH (expected cursor, claude, or antigravity)")
 	}
 
 	defaultTool, err := chooseDefaultTool(available, setupDefaultToolFlag)
