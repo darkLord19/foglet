@@ -56,6 +56,7 @@
     let defaultModel = $state("");
     let defaultAutoPR = $state(appState.settings?.default_autopr || false);
     let defaultNotify = $state(appState.settings?.default_notify || false);
+    let keepAwake = $state(appState.settings?.keep_awake || false);
     let branchPrefix = $state(appState.settings?.branch_prefix || "fog/");
 
     // Models available for the currently-selected default tool
@@ -89,6 +90,7 @@
             const payload: UpdateSettingsPayload = {
                 default_autopr: defaultAutoPR,
                 default_notify: defaultNotify,
+                keep_awake: keepAwake,
                 default_model: defaultModel,
                 default_models: defaultModels,
             };
@@ -266,6 +268,30 @@
                         role="switch"
                         aria-checked={defaultNotify}
                         aria-label="Desktop Notifications"
+                    >
+                        <span class="toggle-thumb"></span>
+                    </button>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="switch-field">
+                    <div class="text-block">
+                        <label for="keep-awake">Keep Mac Awake</label>
+                        <p>
+                            Prevents your Mac from idle-sleeping while agents are
+                            running. A closed lid without an external display
+                            still sleeps — that's an Apple Silicon hardware
+                            behavior no app can override.
+                        </p>
+                    </div>
+                    <button
+                        id="keep-awake"
+                        class="toggle-switch {keepAwake ? 'checked' : ''}"
+                        onclick={() => (keepAwake = !keepAwake)}
+                        role="switch"
+                        aria-checked={keepAwake}
+                        aria-label="Keep Mac Awake"
                     >
                         <span class="toggle-thumb"></span>
                     </button>

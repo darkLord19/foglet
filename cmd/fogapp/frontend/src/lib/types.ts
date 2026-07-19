@@ -58,6 +58,7 @@ export interface Settings {
     default_models?: Record<string, string>;
     default_autopr: boolean;
     default_notify: boolean;
+    keep_awake: boolean;
     branch_prefix?: string;
     gh_installed: boolean;
     gh_authenticated: boolean;
@@ -71,6 +72,7 @@ export interface UpdateSettingsPayload {
     default_models?: Record<string, string>;
     default_autopr?: boolean;
     default_notify?: boolean;
+    keep_awake?: boolean;
     branch_prefix?: string;
 }
 
