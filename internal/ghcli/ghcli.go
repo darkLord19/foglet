@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/darkLord19/foglet/internal/binpath"
 	"github.com/darkLord19/foglet/internal/proc"
 )
 
@@ -245,7 +246,7 @@ func ghPath() string {
 		exeName = "gh.exe"
 	}
 
-	for _, dir := range fallbackBinDirs() {
+	for _, dir := range binpath.FallbackBinDirs() {
 		candidate := filepath.Join(dir, exeName)
 		info, err := os.Stat(candidate)
 		if err != nil || info.IsDir() {
@@ -262,38 +263,7 @@ func ghPath() string {
 	return ""
 }
 
-func fallbackBinDirs() []string {
-	home, _ := os.UserHomeDir()
-	dirs := []string{
-		"/opt/homebrew/bin",
-		"/usr/local/bin",
-		"/opt/homebrew/sbin",
-		"/usr/local/sbin",
-		"/usr/bin",
-		"/bin",
-	}
-	if home != "" {
-		dirs = append(dirs,
-			filepath.Join(home, ".local", "bin"),
-			filepath.Join(home, "bin"),
-		)
-	}
 
-	seen := make(map[string]struct{}, len(dirs))
-	out := make([]string, 0, len(dirs))
-	for _, dir := range dirs {
-		dir = strings.TrimSpace(dir)
-		if dir == "" {
-			continue
-		}
-		if _, ok := seen[dir]; ok {
-			continue
-		}
-		seen[dir] = struct{}{}
-		out = append(out, dir)
-	}
-	return out
-}
 
 // CreatePR creates a pull request for the repository at repoPath.
 func CreatePR(repoPath, title, body, base, head string, draft bool) (string, error) {
