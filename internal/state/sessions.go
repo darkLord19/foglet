@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+// RunEventSink is a narrow interface for appending run events.
+// External components (like MCP) can depend on this without
+// importing the full state.Store.
+type RunEventSink interface {
+	AppendRunEvent(event RunEvent) error
+}
+
 // Session represents one long-lived branch/worktree conversation.
 type Session struct {
 	ID           string    `json:"id"`

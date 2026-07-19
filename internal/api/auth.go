@@ -50,8 +50,8 @@ func ReadTokenFile(fogHome string) (string, error) {
 
 // WithAuth returns middleware that enforces Bearer token authentication.
 // The /health endpoint and OPTIONS preflight requests are exempt.
-// Only /api/* routes require auth so Slack webhooks and other non-API handlers
-// can function without needing to attach the bearer token.
+// Only /api/* and /mcp/* routes require auth so Slack webhooks and other
+// non-API handlers can function without needing to attach the bearer token.
 func WithAuth(token string, next http.Handler) http.Handler {
 	token = strings.TrimSpace(token)
 	if token == "" {
@@ -64,8 +64,8 @@ func WithAuth(token string, next http.Handler) http.Handler {
 			return
 		}
 
-		// Only protect the local API surface.
-		if !strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != "/api" {
+		// Only protect the local API surface and the MCP endpoint.
+		if !strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != "/api" && !strings.HasPrefix(r.URL.Path, "/mcp/") && r.URL.Path != "/mcp" {
 			next.ServeHTTP(w, r)
 			return
 		}

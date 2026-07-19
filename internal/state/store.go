@@ -17,7 +17,14 @@ const (
 	defaultKeyName     = "master.key"
 	githubPATKey       = "github_pat"
 	settingDefaultTool = "default_tool"
+	settingKeepAwake   = "keep_awake"
 )
+
+// SecretReader is a narrow interface for reading secrets.
+// It is satisfied by *Store and can be faked in tests.
+type SecretReader interface {
+	GetSecret(key string) (value string, found bool, err error)
+}
 
 // Store is the Fog state persistence layer backed by SQLite.
 type Store struct {
@@ -100,26 +107,6 @@ func (s *Store) init() error {
 			default_branch TEXT,
 			created_at TEXT NOT NULL
 		);`,
-		`CREATE TABLE IF NOT EXISTS tasks (
-			id TEXT PRIMARY KEY,
-			repo_id INTEGER NOT NULL,
-			parent_task_id TEXT,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL,
-			state TEXT NOT NULL,
-			prompt TEXT NOT NULL,
-			tool TEXT,
-			model TEXT,
-			branch TEXT NOT NULL,
-			worktree_path TEXT,
-			autopr INTEGER NOT NULL DEFAULT 0,
-			commit_msg TEXT,
-			error TEXT,
-			slack_channel_id TEXT,
-			slack_thread_ts TEXT,
-			slack_root_ts TEXT,
-			FOREIGN KEY(repo_id) REFERENCES repos(id)
-		);`,
 		`CREATE TABLE IF NOT EXISTS sessions (
 			id TEXT PRIMARY KEY,
 			repo_name TEXT NOT NULL,
@@ -158,17 +145,7 @@ func (s *Store) init() error {
 			data TEXT,
 			FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE
 		);`,
-		`CREATE TABLE IF NOT EXISTS task_events (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			task_id TEXT NOT NULL,
-			ts TEXT NOT NULL,
-			type TEXT NOT NULL,
-			message TEXT,
-			data TEXT,
-			FOREIGN KEY(task_id) REFERENCES tasks(id)
-		);`,
-		`CREATE INDEX IF NOT EXISTS idx_tasks_repo_created ON tasks(repo_id, created_at DESC);`,
-		`CREATE INDEX IF NOT EXISTS idx_task_events_task_ts ON task_events(task_id, ts DESC);`,
+
 		`CREATE INDEX IF NOT EXISTS idx_sessions_repo_updated ON sessions(repo_name, updated_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_runs_session_created ON runs(session_id, created_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_run_events_run_ts ON run_events(run_id, ts DESC);`,
