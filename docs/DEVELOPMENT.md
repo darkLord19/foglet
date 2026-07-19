@@ -5,7 +5,7 @@
 - Go (use the version in `go.mod`)
 - Git
 - Wails CLI (for desktop dev/build): `wails`
-- Optional (required for repo discovery/import): `gh` (GitHub CLI), an AI tool (`claude`, `cursor-agent`, `gemini`, `aider`)
+- Optional (required for repo discovery/import): `gh` (GitHub CLI), an AI tool (`claude`, `cursor-agent`, `gemini`)
 
 ## Build
 

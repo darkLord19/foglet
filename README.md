@@ -27,7 +27,6 @@ Fog executes tools you already installed:
 - `claude` / `claude-code`
 - `cursor` (requires `cursor-agent` binary)
 - `gemini`
-- `aider`
 
 Adapters prefer headless/streaming modes when available and fall back to plain output when needed.
 

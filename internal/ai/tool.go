@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+
+	"github.com/darkLord19/foglet/internal/binpath"
 )
 
 // Tool represents an AI coding tool
@@ -49,8 +51,6 @@ func GetTool(name string) (Tool, error) {
 		return &ClaudeCode{}, nil
 	case "gemini":
 		return &Gemini{}, nil
-	case "aider":
-		return &Aider{}, nil
 	default:
 		return nil, fmt.Errorf("unknown AI tool: %s", name)
 	}
@@ -62,7 +62,6 @@ func DetectTool(preferred string) (Tool, error) {
 		&Cursor{},
 		&ClaudeCode{},
 		&Gemini{},
-		&Aider{},
 	}
 
 	// Try preferred first
@@ -85,7 +84,7 @@ func DetectTool(preferred string) (Tool, error) {
 
 // AvailableToolNames returns canonical tool names supported by Fog.
 func AvailableToolNames() []string {
-	return []string{"cursor", "claude", "gemini", "aider"}
+	return []string{"cursor", "claude", "gemini"}
 }
 
 // ExecuteWithOptionalStream runs a tool and streams chunks when supported.
@@ -133,7 +132,7 @@ func commandPath(name string) string {
 		return path
 	}
 
-	for _, dir := range fallbackBinDirs() {
+	for _, dir := range binpath.FallbackBinDirs() {
 		candidate := filepath.Join(dir, name)
 		info, err := os.Stat(candidate)
 		if err != nil || info.IsDir() {
@@ -153,40 +152,4 @@ func commandPath(name string) string {
 	return ""
 }
 
-func fallbackBinDirs() []string {
-	home, _ := os.UserHomeDir()
-	dirs := []string{
-		"/opt/homebrew/bin",
-		"/usr/local/bin",
-		"/opt/homebrew/sbin",
-		"/usr/local/sbin",
-	}
-	if home != "" {
-		dirs = append(dirs,
-			filepath.Join(home, ".local", "bin"),
-			filepath.Join(home, "bin"),
-			filepath.Join(home, ".cargo", "bin"),
-			filepath.Join(home, ".bun", "bin"),
-			filepath.Join(home, ".npm-global", "bin"),
-			filepath.Join(home, "Library", "pnpm"),
-		)
-		if matches, err := filepath.Glob(filepath.Join(home, ".nvm", "versions", "node", "*", "bin")); err == nil {
-			dirs = append(dirs, matches...)
-		}
-	}
 
-	seen := make(map[string]struct{}, len(dirs))
-	out := make([]string, 0, len(dirs))
-	for _, dir := range dirs {
-		dir = strings.TrimSpace(dir)
-		if dir == "" {
-			continue
-		}
-		if _, ok := seen[dir]; ok {
-			continue
-		}
-		seen[dir] = struct{}{}
-		out = append(out, dir)
-	}
-	return out
-}

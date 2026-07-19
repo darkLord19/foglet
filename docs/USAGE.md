@@ -23,7 +23,7 @@ go install github.com/darkLord19/foglet/cmd/{wtx,fog,fogd,fogcloud,fogapp}@lates
 Fog needs:
 - GitHub CLI (`gh`) installed and authenticated to discover/import repos
 - a default AI tool to run when you omit `tool`
-- at least one installed supported AI CLI (`claude`, `cursor-agent`, `gemini`, or `aider`)
+- at least one installed supported AI CLI (`claude`, `cursor-agent`, or `gemini`)
 
 ```bash
 fog setup
@@ -137,7 +137,6 @@ Fog executes tools you already installed:
 - `claude` / `claude-code`
 - `agent`
 - `gemini`
-- `aider`
 
 Adapters prefer headless/streaming modes when available and fall back to plain output when needed.
 

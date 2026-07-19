@@ -20,11 +20,11 @@ func TestChooseDefaultToolRequestedUnavailable(t *testing.T) {
 }
 
 func TestChooseDefaultToolSingleOption(t *testing.T) {
-	tool, err := chooseDefaultTool([]string{"aider"}, "")
+	tool, err := chooseDefaultTool([]string{"cursor"}, "")
 	if err != nil {
 		t.Fatalf("chooseDefaultTool returned error: %v", err)
 	}
-	if tool != "aider" {
-		t.Fatalf("tool mismatch: got %q want %q", tool, "aider")
+	if tool != "cursor" {
+		t.Fatalf("tool mismatch: got %q want %q", tool, "cursor")
 	}
 }
