@@ -164,8 +164,7 @@ func (s *Server) getCloudStatus(w http.ResponseWriter) {
 		HasDeviceToken: hasToken,
 		Paired:         strings.TrimSpace(deviceID) != "" && hasToken,
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+	s.writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) loadCloudConfig() (cloudURL, deviceID, deviceToken string, err error) {

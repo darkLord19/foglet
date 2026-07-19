@@ -49,8 +49,7 @@ func (s *Server) handleRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(repos)
+	s.writeJSON(w, http.StatusOK, repos)
 }
 
 func (s *Server) handleDiscoverRepos(w http.ResponseWriter, r *http.Request) {
@@ -75,8 +74,7 @@ func (s *Server) handleDiscoverRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(repos)
+	s.writeJSON(w, http.StatusOK, repos)
 }
 
 func (s *Server) handleImportRepos(w http.ResponseWriter, r *http.Request) {
@@ -146,8 +144,7 @@ func (s *Server) handleImportRepos(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(importReposResponse{
+	s.writeJSON(w, http.StatusOK, importReposResponse{
 		Imported: imported,
 	})
 }

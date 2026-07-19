@@ -4,21 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/darkLord19/foglet/internal/ai"
 	"github.com/darkLord19/foglet/internal/editor"
-	"github.com/darkLord19/foglet/internal/git"
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
 	"github.com/darkLord19/foglet/internal/toolcfg"
 )
-
-var nonBranchSlugChar = regexp.MustCompile(`[^a-z0-9]+`)
 
 // dangerousShellChars contains characters that enable shell injection when
 // passed through sh -c. We reject commands containing any of these.
@@ -196,8 +191,7 @@ func (s *Server) listSessions(w http.ResponseWriter) {
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(out)
+	s.writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
@@ -234,7 +228,7 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	branch, err := s.resolveBranchName(repo.BaseWorktreePath, req.BranchName, req.Prompt)
+	branch, err := s.runner.ResolveBranch(repo.BaseWorktreePath, req.BranchName, req.Prompt)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -279,9 +273,7 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusAccepted)
-		_ = json.NewEncoder(w).Encode(asyncCreateSessionResponse{
+		s.writeJSON(w, http.StatusAccepted, asyncCreateSessionResponse{
 			SessionID: session.ID,
 			RunID:     run.ID,
 			Status:    "accepted",
@@ -294,8 +286,7 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(createSessionResponse{
+	s.writeJSON(w, http.StatusOK, createSessionResponse{
 		Session: session,
 		Run:     run,
 	})
@@ -317,8 +308,7 @@ func (s *Server) getSession(w http.ResponseWriter, sessionID string) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(sessionDetailResponse{
+	s.writeJSON(w, http.StatusOK, sessionDetailResponse{
 		Session: session,
 		Runs:    runs,
 	})
@@ -341,8 +331,7 @@ func (s *Server) listSessionRuns(w http.ResponseWriter, sessionID string) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(runs)
+	s.writeJSON(w, http.StatusOK, runs)
 }
 
 func (s *Server) createFollowUpRun(w http.ResponseWriter, r *http.Request, sessionID string) {
@@ -367,9 +356,7 @@ func (s *Server) createFollowUpRun(w http.ResponseWriter, r *http.Request, sessi
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusAccepted)
-		_ = json.NewEncoder(w).Encode(map[string]string{
+		s.writeJSON(w, http.StatusAccepted, map[string]string{
 			"run_id":  run.ID,
 			"status":  "accepted",
 			"session": run.SessionID,
@@ -382,8 +369,7 @@ func (s *Server) createFollowUpRun(w http.ResponseWriter, r *http.Request, sessi
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(run)
+	s.writeJSON(w, http.StatusOK, run)
 }
 
 func (s *Server) createForkSession(w http.ResponseWriter, r *http.Request, sourceSessionID string) {
@@ -412,7 +398,7 @@ func (s *Server) createForkSession(w http.ResponseWriter, r *http.Request, sourc
 		return
 	}
 
-	branch, err := s.resolveBranchName(sourceSession.WorktreePath, req.BranchName, req.Prompt)
+	branch, err := s.runner.ResolveBranch(sourceSession.WorktreePath, req.BranchName, req.Prompt)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -457,9 +443,7 @@ func (s *Server) createForkSession(w http.ResponseWriter, r *http.Request, sourc
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusAccepted)
-		_ = json.NewEncoder(w).Encode(asyncCreateSessionResponse{
+		s.writeJSON(w, http.StatusAccepted, asyncCreateSessionResponse{
 			SessionID: session.ID,
 			RunID:     run.ID,
 			Status:    "accepted",
@@ -472,8 +456,7 @@ func (s *Server) createForkSession(w http.ResponseWriter, r *http.Request, sourc
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(createSessionResponse{
+	s.writeJSON(w, http.StatusOK, createSessionResponse{
 		Session: session,
 		Run:     run,
 	})
@@ -519,8 +502,7 @@ func (s *Server) listRunEvents(w http.ResponseWriter, r *http.Request, sessionID
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(events)
+	s.writeJSON(w, http.StatusOK, events)
 }
 
 func (s *Server) streamRunEvents(w http.ResponseWriter, r *http.Request, sessionID, runID string) {
@@ -627,15 +609,19 @@ func (s *Server) cancelSessionRun(w http.ResponseWriter, sessionID string) {
 		http.Error(w, err.Error(), status)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusAccepted)
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	s.writeJSON(w, http.StatusAccepted, map[string]string{
 		"status": "cancel_requested",
 		"run_id": run.ID,
 	})
 }
 
 func (s *Server) getSessionDiff(w http.ResponseWriter, sessionID string) {
+	stat, patch, err := s.runner.SessionDiff(sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	session, found, err := s.runner.GetSession(sessionID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -660,34 +646,13 @@ func (s *Server) getSessionDiff(w http.ResponseWriter, sessionID string) {
 	if latest, found, err := s.stateStore.GetLatestRun(session.ID); err == nil && found && strings.TrimSpace(latest.WorktreePath) != "" {
 		worktreePath = strings.TrimSpace(latest.WorktreePath)
 	}
-	if worktreePath == "" {
-		http.Error(w, "session has no worktree path", http.StatusBadRequest)
-		return
-	}
 
-	baseBranch := strings.TrimSpace(repo.DefaultBranch)
-	if baseBranch == "" {
-		baseBranch = "main"
-	}
-	diffRef := fmt.Sprintf("%s...%s", baseBranch, session.Branch)
-	statOut, err := runGitInWorktree(worktreePath, "diff", "--stat", "--no-color", diffRef)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	patchOut, err := runGitInWorktree(worktreePath, "diff", "--no-color", diffRef)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(sessionDiffResponse{
-		BaseBranch:   baseBranch,
+	s.writeJSON(w, http.StatusOK, sessionDiffResponse{
+		BaseBranch:   repo.DefaultBranch,
 		Branch:       session.Branch,
 		WorktreePath: worktreePath,
-		Stat:         strings.TrimSpace(statOut),
-		Patch:        strings.TrimSpace(patchOut),
+		Stat:         stat,
+		Patch:        patch,
 	})
 }
 
@@ -722,8 +687,7 @@ func (s *Server) openSessionWorktree(w http.ResponseWriter, sessionID string) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
+	s.writeJSON(w, http.StatusOK, map[string]string{
 		"status":        "opened",
 		"editor":        ed.Name(),
 		"worktree_path": worktreePath,
@@ -741,87 +705,4 @@ func preferredEditorForTool(toolName string) string {
 	}
 }
 
-func runGitInWorktree(worktreePath string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = worktreePath
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("git %s failed: %w\n%s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
-	}
-	return string(out), nil
-}
 
-func (s *Server) resolveBranchName(repoPath, requested, prompt string) (string, error) {
-	requested = strings.TrimSpace(requested)
-	if requested != "" {
-		return validateBranchName(requested)
-	}
-
-	prefix := "fog"
-	if stored, found, err := s.stateStore.GetSetting("branch_prefix"); err == nil && found {
-		stored = strings.TrimSpace(stored)
-		if stored != "" {
-			prefix = stored
-		}
-	}
-
-	slug := slugifyPrompt(prompt)
-	baseBranch := strings.Trim(prefix, "/") + "/" + slug
-	if len(baseBranch) > 255 {
-		baseBranch = strings.Trim(baseBranch[:255], "/.-")
-	}
-
-	g := git.New(repoPath)
-
-	truncateWithSuffix := func(base, suffix string) string {
-		maxBaseLen := max(255-len(suffix), 1)
-		if len(base) > maxBaseLen {
-			base = strings.Trim(base[:maxBaseLen], "/.-")
-		}
-		return base + suffix
-	}
-
-	for i := 0; i <= 100; i++ {
-		branch := baseBranch
-		if i > 0 {
-			branch = truncateWithSuffix(baseBranch, fmt.Sprintf("-%d", i))
-		}
-		if !g.BranchExists(branch) {
-			return validateBranchName(branch)
-		}
-	}
-
-	// Fallback to a short random-ish suffix to avoid exceeding git's 255-byte limit.
-	suffix := "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
-	return validateBranchName(truncateWithSuffix(baseBranch, suffix))
-}
-
-func validateBranchName(value string) (string, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "", fmt.Errorf("branch name cannot be empty")
-	}
-	if len(value) > 255 {
-		return "", fmt.Errorf("branch name exceeds 255 characters")
-	}
-	if strings.HasPrefix(value, "/") || strings.HasSuffix(value, "/") {
-		return "", fmt.Errorf("branch name cannot start or end with '/'")
-	}
-	if strings.Contains(value, "..") || strings.Contains(value, "//") || strings.Contains(value, "@{") {
-		return "", fmt.Errorf("branch name contains invalid sequence")
-	}
-	if strings.ContainsAny(value, " ~^:?*[\\") {
-		return "", fmt.Errorf("branch name contains invalid character")
-	}
-	return value, nil
-}
-
-func slugifyPrompt(prompt string) string {
-	slug := strings.ToLower(strings.TrimSpace(prompt))
-	slug = nonBranchSlugChar.ReplaceAllString(slug, "-")
-	slug = strings.Trim(slug, "-")
-	if slug == "" {
-		return "task-" + time.Now().UTC().Format("20060102150405")
-	}
-	return slug
-}

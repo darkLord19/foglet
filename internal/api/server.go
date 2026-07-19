@@ -13,9 +13,6 @@ import (
 	"github.com/darkLord19/foglet/internal/git"
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
-	"github.com/darkLord19/foglet/internal/task"
-	"github.com/darkLord19/foglet/internal/toolcfg"
-	"github.com/google/uuid"
 )
 
 // Server provides HTTP API for Fog
@@ -28,9 +25,6 @@ type Server struct {
 
 // New creates a new API server
 func New(runner *runner.Runner, stateStore *state.Store, port int) *Server {
-	if runner != nil {
-		runner.SetStateStore(stateStore)
-	}
 	return &Server{
 		runner:     runner,
 		stateStore: stateStore,
@@ -40,9 +34,6 @@ func New(runner *runner.Runner, stateStore *state.Store, port int) *Server {
 
 // RegisterRoutes registers API routes on the provided mux
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/tasks", s.handleTasks)
-	mux.HandleFunc("/api/tasks/create", s.handleCreateTask)
-	mux.HandleFunc("/api/tasks/", s.handleTaskDetail)
 	mux.HandleFunc("/api/sessions", s.handleSessions)
 	mux.HandleFunc("/api/sessions/", s.handleSessionDetail)
 	mux.HandleFunc("/api/repos", s.handleRepos)
@@ -68,134 +59,9 @@ func (s *Server) Start() error {
 	return http.ListenAndServe(addr, WithCORS(mux))
 }
 
-// handleTasks lists all tasks
-func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	tasks, err := s.runner.ListTasks()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tasks)
-}
-
-// CreateTaskRequest represents a task creation request
-type CreateTaskRequest struct {
-	Branch  string       `json:"branch"`
-	Repo    string       `json:"repo"`
-	Prompt  string       `json:"prompt"`
-	AITool  string       `json:"ai_tool"`
-	Options task.Options `json:"options"`
-}
-
-// handleCreateTask creates a new task
-func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req CreateTaskRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Validate request
-	if req.Branch == "" || req.Prompt == "" || req.Repo == "" {
-		http.Error(w, "repo, branch, and prompt are required", http.StatusBadRequest)
-		return
-	}
-
-	repo, found, err := s.stateStore.GetRepoByName(req.Repo)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if !found {
-		http.Error(w, fmt.Sprintf("unknown repo: %s", req.Repo), http.StatusBadRequest)
-		return
-	}
-	if repo.BaseWorktreePath == "" {
-		http.Error(w, fmt.Sprintf("repo %s has no base worktree path", req.Repo), http.StatusBadRequest)
-		return
-	}
-
-	tool, err := toolcfg.ResolveTool(req.AITool, s.stateStore, "api")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Create task
-	t := &task.Task{
-		ID:        uuid.New().String(),
-		State:     task.StateCreated,
-		Branch:    req.Branch,
-		Prompt:    req.Prompt,
-		AITool:    tool,
-		Options:   req.Options,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	// Execute asynchronously if requested
-	if req.Options.Async {
-		go s.runner.ExecuteInRepo(repo.BaseWorktreePath, t)
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusAccepted)
-		json.NewEncoder(w).Encode(map[string]any{
-			"task_id": t.ID,
-			"status":  "accepted",
-		})
-		return
-	}
-
-	// Execute synchronously
-	if err := s.runner.ExecuteInRepo(repo.BaseWorktreePath, t); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(t)
-}
-
-// handleTaskDetail gets task details
-func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Extract task ID from path
-	taskID := r.URL.Path[len("/api/tasks/"):]
-	if taskID == "" {
-		http.Error(w, "task ID required", http.StatusBadRequest)
-		return
-	}
-
-	t, err := s.runner.GetTask(taskID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(t)
-}
-
 // handleHealth returns server health
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	s.writeJSON(w, http.StatusOK, map[string]string{
 		"status": "ok",
 		"time":   time.Now().Format(time.RFC3339),
 	})
@@ -207,6 +73,7 @@ type SettingsResponse struct {
 	DefaultModels      map[string]string `json:"default_models"`
 	DefaultAutoPR      bool              `json:"default_autopr"`
 	DefaultNotify      bool              `json:"default_notify"`
+	KeepAwake          bool              `json:"keep_awake"`
 	BranchPrefix       string            `json:"branch_prefix,omitempty"`
 	GhInstalled        bool              `json:"gh_installed"`
 	GhAuthenticated    bool              `json:"gh_authenticated"`
@@ -220,6 +87,7 @@ type UpdateSettingsRequest struct {
 	DefaultModels map[string]string `json:"default_models"`
 	DefaultAutoPR *bool             `json:"default_autopr"`
 	DefaultNotify *bool             `json:"default_notify"`
+	KeepAwake     *bool             `json:"keep_awake,omitempty"`
 	BranchPrefix  *string           `json:"branch_prefix"`
 }
 
@@ -268,10 +136,13 @@ func (s *Server) getSettings(w http.ResponseWriter) {
 		resp.GhAuthenticated = ghcli.IsGhAuthenticated()
 	}
 
+	if keepAwake, found, err := s.stateStore.GetSetting("keep_awake"); err == nil && found {
+		resp.KeepAwake = keepAwake == "true"
+	}
+
 	resp.OnboardingRequired = !resp.GhAuthenticated || strings.TrimSpace(resp.DefaultTool) == ""
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(resp)
+	s.writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
@@ -333,6 +204,17 @@ func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.KeepAwake != nil {
+		val := "false"
+		if *req.KeepAwake {
+			val = "true"
+		}
+		if err := s.stateStore.SetSetting("keep_awake", val); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
 	if req.BranchPrefix != nil {
 		prefix := strings.TrimSpace(*req.BranchPrefix)
 		if prefix == "" {
@@ -365,6 +247,20 @@ func isToolAvailable(name string) bool {
 		return false
 	}
 	return tool.IsAvailable()
+}
+
+// writeJSON writes a JSON response with the given status code and payload.
+func (s *Server) writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+// writeErr writes a JSON error response with the given status code and message.
+func writeErr(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
 // allowedCORSOrigin returns the origin if it matches the local desktop allowlist,
@@ -465,8 +361,7 @@ func (s *Server) handleListBranches(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(out)
+	s.writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleGhStatus(w http.ResponseWriter, r *http.Request) {
@@ -485,8 +380,7 @@ func (s *Server) handleGhStatus(w http.ResponseWriter, r *http.Request) {
 		status["authenticated"] = ghcli.IsGhAuthenticated()
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
+	s.writeJSON(w, http.StatusOK, status)
 }
 
 func runtimeOS() string {
