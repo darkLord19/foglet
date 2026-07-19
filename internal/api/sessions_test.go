@@ -163,17 +163,25 @@ func TestResolveBranchNameUsesPrefixAndSlugifiesPrompt(t *testing.T) {
 	runGit(t, repoPath, "config", "user.name", "Test User")
 	runGit(t, repoPath, "commit", "--allow-empty", "-m", "init")
 
-	branch, err := srv.resolveBranchName(repoPath, "", "Add OTP Login!!")
+	branch, err := srv.runner.ResolveBranch(repoPath, "", "Add OTP Login!!")
 	if err != nil {
-		t.Fatalf("resolveBranchName failed: %v", err)
+		t.Fatalf("ResolveBranch failed: %v", err)
 	}
 	if branch != "team/add-otp-login" {
 		t.Fatalf("unexpected branch: %q", branch)
 	}
 }
 
-func TestValidateBranchNameRejectsInvalidSequences(t *testing.T) {
-	_, err := validateBranchName("feature//bad")
+func TestResolveBranchNameRejectsInvalidSequences(t *testing.T) {
+	srv := newTestServer(t)
+
+	repoPath := t.TempDir()
+	runGit(t, repoPath, "init")
+	runGit(t, repoPath, "config", "user.email", "test@example.com")
+	runGit(t, repoPath, "config", "user.name", "Test User")
+	runGit(t, repoPath, "commit", "--allow-empty", "-m", "init")
+
+	_, err := srv.runner.ResolveBranch(repoPath, "feature//bad", "")
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -229,6 +237,8 @@ func seedSessionFixture(t *testing.T, srv *Server) {
 }
 
 func TestResolveBranchName_Unique(t *testing.T) {
+	srv := newTestServer(t)
+
 	// 1. Setup a dummy repo
 	repoPath := t.TempDir()
 	runGit(t, repoPath, "init")
@@ -236,33 +246,19 @@ func TestResolveBranchName_Unique(t *testing.T) {
 	runGit(t, repoPath, "config", "user.name", "Test User")
 	runGit(t, repoPath, "commit", "--allow-empty", "-m", "init")
 
-	// 2. Setup Server with real store but mock runner (runner is interface in struct? no, it's *runner.Runner)
-	// We only need stateStore for resolveBranchName
-	store, err := state.NewStore(t.TempDir())
-	if err != nil {
-		t.Fatalf("new store: %v", err)
-	}
-	defer store.Close()
-
-	srv := &Server{
-		stateStore: store,
-		// runner not needed for resolveBranchName
-	}
-
-	// 3. Create a branch "fog/task-collision"
+	// 2. Create a branch "fog/task-collision"
 	branchName := "fog/task-collision"
 	runGit(t, repoPath, "branch", branchName)
 
-	// 4. Call resolveBranchName with a prompt that produces "task-collision" slug
-	// Stub slugify by passing a prompt that slugs to "task-collision"
+	// 3. Call ResolveBranch with a prompt that produces "task-collision" slug
 	prompt := "Task Collision"
 
-	uniqueName, err := srv.resolveBranchName(repoPath, "", prompt)
+	uniqueName, err := srv.runner.ResolveBranch(repoPath, "", prompt)
 	if err != nil {
-		t.Fatalf("resolveBranchName failed: %v", err)
+		t.Fatalf("ResolveBranch failed: %v", err)
 	}
 
-	// 5. Assert uniqueName is NOT "fog/task-collision"
+	// 4. Assert uniqueName is NOT "fog/task-collision"
 	if uniqueName == branchName {
 		t.Errorf("Expected unique name, got collision: %s", uniqueName)
 	}

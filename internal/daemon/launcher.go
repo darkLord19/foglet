@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -12,7 +13,7 @@ import (
 	"time"
 
 	"github.com/darkLord19/foglet/internal/api"
-	"github.com/darkLord19/foglet/internal/runner"
+	"github.com/darkLord19/foglet/internal/app"
 	"github.com/darkLord19/foglet/internal/state"
 )
 
@@ -76,42 +77,28 @@ func startFogd(fogHome string, port int) error {
 		cwd = fogHome
 	}
 
-	r, err := runner.New(cwd, fogHome)
+	application, err := app.Build(context.Background(), app.BuildOpts{
+		FogHome: fogHome,
+		Cwd:     cwd,
+		Port:    port,
+	})
 	if err != nil {
-		return fmt.Errorf("create embedded fog runner: %w", err)
-	}
-	stateStore, err := state.NewStore(fogHome)
-	if err != nil {
-		return fmt.Errorf("open embedded fog state store: %w", err)
-	}
-
-	mux := http.NewServeMux()
-	api.New(r, stateStore, port).RegisterRoutes(mux)
-
-	// Generate API token for local auth.
-	apiToken, err := api.GenerateAPIToken()
-	if err != nil {
-		_ = stateStore.Close()
-		return fmt.Errorf("generate api token: %w", err)
-	}
-	if err := api.WriteTokenFile(fogHome, apiToken); err != nil {
-		_ = stateStore.Close()
-		return fmt.Errorf("write api token: %w", err)
+		return fmt.Errorf("build embedded fog app: %w", err)
 	}
 
 	server := &http.Server{
 		Addr:    ":" + strconv.Itoa(port),
-		Handler: api.WithCORS(api.WithBodyLimit(api.WithAuth(apiToken, mux))),
+		Handler: application.Handler,
 	}
 	ln, err := net.Listen("tcp", server.Addr)
 	if err != nil {
-		_ = stateStore.Close()
+		application.Close()
 		return fmt.Errorf("listen embedded fogd on %s: %w", server.Addr, err)
 	}
 
 	embeddedDaemons[port] = &embeddedDaemon{
 		server:     server,
-		stateStore: stateStore,
+		stateStore: application.Store,
 	}
 
 	go func() {
@@ -121,7 +108,7 @@ func startFogd(fogHome string, port int) error {
 		embeddedMu.Lock()
 		delete(embeddedDaemons, port)
 		embeddedMu.Unlock()
-		_ = stateStore.Close()
+		_ = application.Store.Close()
 	}()
 
 	return nil

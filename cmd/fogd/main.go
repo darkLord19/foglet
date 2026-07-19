@@ -11,13 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/darkLord19/foglet/internal/api"
+	"github.com/darkLord19/foglet/internal/app"
 	"github.com/darkLord19/foglet/internal/cloudcfg"
 	"github.com/darkLord19/foglet/internal/cloudrelay"
 	"github.com/darkLord19/foglet/internal/env"
-	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/slack"
-	"github.com/darkLord19/foglet/internal/state"
 	"github.com/spf13/cobra"
 )
 
@@ -77,47 +75,28 @@ func runDaemon() error {
 	daemonCtx, daemonCancel := context.WithCancel(context.Background())
 	defer daemonCancel()
 
-	// Get current directory (repo root)
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 
-	// Get config dir
 	fogHome, err := env.FogHome()
 	if err != nil {
 		return err
 	}
-	configDir := fogHome
 
-	// Create runner
-	r, err := runner.New(cwd, configDir)
+	// Build the application graph via composition root
+	application, err := app.Build(daemonCtx, app.BuildOpts{
+		FogHome: fogHome,
+		Cwd:     cwd,
+		Port:    flagPort,
+	})
 	if err != nil {
 		return err
 	}
+	defer application.Close()
 
-	stateStore, err := state.NewStore(configDir)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = stateStore.Close() }()
-
-	// Generate API token for local auth
-	apiToken, err := api.GenerateAPIToken()
-	if err != nil {
-		return err
-	}
-	if err := api.WriteTokenFile(configDir, apiToken); err != nil {
-		return err
-	}
-	log.Printf("API token written to %s/api.token\n", configDir)
-
-	// Create mux
-	mux := http.NewServeMux()
-
-	// Register API routes
-	apiServer := api.New(r, stateStore, flagPort)
-	apiServer.RegisterRoutes(mux)
+	log.Printf("API token written to %s/api.token\n", fogHome)
 
 	// Register Slack integration if enabled
 	if flagEnableSlack {
@@ -132,15 +111,15 @@ func runDaemon() error {
 				log.Println("Warning: Slack HTTP mode enabled without --slack-secret")
 			}
 
-			slackHandler := slack.New(r, stateStore, flagSlackSecret)
-			mux.HandleFunc("/slack/command", slackHandler.HandleCommand)
+			slackHandler := slack.New(application.Runner, application.Store, flagSlackSecret)
+			application.Mount("/slack/command", http.HandlerFunc(slackHandler.HandleCommand))
 
 			log.Println("Slack integration enabled (http mode)")
 			log.Printf("Slack webhook: http://localhost:%d/slack/command\n", flagPort)
 			log.Println("Note: Use a tunnel service (ngrok, cloudflared) to expose this to Slack")
 
 		case "socket":
-			socketServer := slack.NewSocketMode(r, stateStore, flagSlackApp, flagSlackBot)
+			socketServer := slack.NewSocketMode(application.Runner, application.Store, flagSlackApp, flagSlackBot)
 			go func() {
 				if err := socketServer.Run(daemonCtx); err != nil {
 					log.Printf("Slack socket mode stopped: %v", err)
@@ -155,20 +134,21 @@ func runDaemon() error {
 		}
 	}
 
+	// Cloud relay setup
 	cloudURL := strings.TrimSpace(flagCloudURL)
 	if cloudURL != "" {
-		if err := stateStore.SetSetting(cloudcfg.SettingCloudURL, cloudURL); err != nil {
+		if err := application.Store.SetSetting(cloudcfg.SettingCloudURL, cloudURL); err != nil {
 			return fmt.Errorf("persist cloud url: %w", err)
 		}
-	} else if stored, found, err := stateStore.GetSetting(cloudcfg.SettingCloudURL); err == nil && found {
+	} else if stored, found, err := application.Store.GetSetting(cloudcfg.SettingCloudURL); err == nil && found {
 		cloudURL = strings.TrimSpace(stored)
 	}
 	if cloudURL != "" {
-		deviceID, foundID, err := stateStore.GetSetting(cloudcfg.SettingCloudDeviceID)
+		deviceID, foundID, err := application.Store.GetSetting(cloudcfg.SettingCloudDeviceID)
 		if err != nil {
 			return err
 		}
-		deviceToken, foundToken, err := stateStore.GetSecret(cloudcfg.SecretCloudDeviceTok)
+		deviceToken, foundToken, err := application.Store.GetSecret(cloudcfg.SecretCloudDeviceTok)
 		if err != nil {
 			return err
 		}
@@ -183,7 +163,7 @@ func runDaemon() error {
 			if err != nil {
 				return err
 			}
-			relay, err := cloudrelay.New(client, r, stateStore, cloudrelay.RelayConfig{
+			relay, err := cloudrelay.New(client, application.Runner, application.Store, cloudrelay.RelayConfig{
 				PollInterval: flagCloudPoll,
 			})
 			if err != nil {
@@ -215,7 +195,7 @@ func runDaemon() error {
 	log.Printf("API: http://localhost:%d/api/\n", flagPort)
 	log.Printf("Health: http://localhost:%d/health\n", flagPort)
 
-	return http.ListenAndServe(addr, api.WithCORS(api.WithBodyLimit(api.WithAuth(apiToken, mux))))
+	return http.ListenAndServe(addr, application.Handler)
 }
 
 func validateSlackConfig(mode, botToken, appToken string) error {
