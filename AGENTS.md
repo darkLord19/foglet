@@ -4,7 +4,7 @@ Fog turns your local machine into a "personal cloud" for AI coding agents.
 
 This repo is intentionally local-first:
 - Fog does not host an LLM.
-- Fog runs existing AI coding CLIs (Cursor Agent, Claude Code, Gemini CLI, Aider) on the user's machine.
+- Fog runs existing AI coding CLIs (Cursor Agent, Claude Code, Gemini CLI) on the user's machine.
 - Isolation and auditability come from Git worktrees and Git history.
 
 ## Product Principles
@@ -104,7 +104,6 @@ Supported tools (canonical names):
 - `claude` (also accepts `claude-code`)
 - `cursor`
 - `gemini`
-- `aider`
 
 Tool detection notes:
 - GUI-launched processes on macOS can have a limited PATH.
