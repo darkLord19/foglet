@@ -106,6 +106,31 @@ func TestWithAuthCorrectToken(t *testing.T) {
 	}
 }
 
+func TestWithAuthProtectsMCP(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	handler := WithAuth("secret-token", inner)
+
+	// The MCP seam must require a bearer token just like /api/.
+	for _, path := range []string{"/mcp", "/mcp/tools"} {
+		req := httptest.NewRequest(http.MethodPost, path, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 for %s without token, got %d", path, rec.Code)
+		}
+
+		req = httptest.NewRequest(http.MethodPost, path, nil)
+		req.Header.Set("Authorization", "Bearer secret-token")
+		rec = httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNoContent {
+			t.Fatalf("expected 204 for %s with valid token, got %d", path, rec.Code)
+		}
+	}
+}
+
 func TestWithAuthExemptsHealth(t *testing.T) {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
