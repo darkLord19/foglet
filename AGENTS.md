@@ -11,7 +11,8 @@ This repo is intentionally local-first:
 
 - Local-first: no mandatory cloud dependency.
 - Explicit control: no silent edits to the user’s main checkout.
-- Isolation by default: work happens in worktrees/branches, not the repo root.
+- Isolation by default: work happens in worktrees/branches, not the repo root,
+  and agent processes run under a host guard that denies reads of credentials.
 - Auditability: state is persisted locally; changes are visible via Git.
 - Security: secrets are encrypted at rest; no plaintext PAT storage.
 
@@ -90,6 +91,29 @@ Encryption:
 - Secrets are encrypted at rest in SQLite using AES-256-GCM with a local key file.
 - Never store GitHub PATs or Slack tokens in plaintext.
 - Avoid logging tokens; sanitize command args that may contain `Authorization` headers.
+
+## Host Guard (Agent Isolation)
+
+Worktrees isolate the *repo*; they do not isolate the *machine*. Agent CLIs are
+spawned with the daemon's ambient authority, so `internal/sandbox` additionally
+denies them read access to credentials they have no reason to touch: `~/.ssh`,
+`~/.aws`, `~/.config/gh`, `~/.claude.json`, and Fog's own `master.key`,
+`api.token`, and `fog.db`.
+
+Rules:
+
+- The guard wraps AI CLI invocations only (`internal/ai/guarded.go`). Git and
+  `gh` continue to run unguarded on the host, which is what lets Fog push and
+  open PRs with credentials the agent cannot read.
+- `FOG_HOME` is denied **selectively**, never wholesale — session worktrees live
+  under `FOG_HOME/repos`, so a blanket deny would lock the agent out of the code
+  it was asked to edit. There is a regression test for this.
+- Paths must be symlink-resolved before entering a profile. A seatbelt rule
+  naming an unresolved path silently matches nothing and fails open.
+- Guard setup failures are non-fatal by design: the command runs unrestricted
+  rather than the session breaking. Check `Wrapped.Applied` to tell which.
+- macOS uses `sandbox-exec`. Linux enforcement is not implemented yet
+  (`guard_other.go` is a passthrough that reports `Applied == false`).
 
 ## AI Tool Adapters
 
@@ -202,6 +226,9 @@ Use a dev home dir to avoid polluting real state:
 - Tool not detected in desktop:
   - verify `GET /api/settings` includes `available_tools`
   - remember desktop UI caches settings until reload.
+- Agent run failing in a way that smells like file permissions:
+  - set `FOG_DISABLE_HOST_GUARD=1` to run the agent unrestricted and confirm
+    whether `internal/sandbox` is the cause before digging further.
 
 ## Development Commands
 

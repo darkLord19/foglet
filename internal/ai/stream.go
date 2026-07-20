@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
-
-	"github.com/darkLord19/foglet/internal/proc"
 )
 
 type streamJSONParser struct {
@@ -88,7 +86,7 @@ func (p *streamJSONParser) ConversationID() string {
 
 func runJSONStreamingCommand(ctx context.Context, workdir, cmdName string, args []string, onChunk func(string)) (output, conversationID string, err error) {
 	parser := newStreamJSONParser(onChunk)
-	raw, err := proc.RunStreaming(ctx, workdir, cmdName, parser.Feed, args...)
+	raw, err := runGuardedStreaming(ctx, workdir, cmdName, parser.Feed, args)
 	parser.Close()
 
 	output = parser.Output()
@@ -100,7 +98,7 @@ func runJSONStreamingCommand(ctx context.Context, workdir, cmdName string, args 
 
 func runPlainStreamingCommand(ctx context.Context, workdir, cmdName string, args []string, onChunk func(string)) (string, error) {
 	var out bytes.Buffer
-	_, err := proc.RunStreaming(ctx, workdir, cmdName, func(chunk []byte) {
+	_, err := runGuardedStreaming(ctx, workdir, cmdName, func(chunk []byte) {
 		if len(chunk) == 0 {
 			return
 		}
@@ -108,7 +106,7 @@ func runPlainStreamingCommand(ctx context.Context, workdir, cmdName string, args
 		if onChunk != nil {
 			onChunk(string(chunk))
 		}
-	}, args...)
+	}, args)
 	return strings.TrimSpace(out.String()), err
 }
 
