@@ -100,11 +100,24 @@ denies them read access to credentials they have no reason to touch: `~/.ssh`,
 `~/.aws`, `~/.config/gh`, `~/.claude.json`, and Fog's own `master.key`,
 `api.token`, and `fog.db`.
 
+The guard has two halves: a filesystem deny-list and an environment allowlist.
+Agent processes receive only shell/locale basics, proxy and CA settings, Node
+runtime vars, and their **own** tool's credential prefixes — so a Claude run
+cannot see `CURSOR_API_KEY`, and no run sees `AWS_*`, `GITHUB_TOKEN`, or
+`GOOGLE_APPLICATION_CREDENTIALS`.
+
 Rules:
 
 - The guard wraps AI CLI invocations only (`internal/ai/guarded.go`). Git and
   `gh` continue to run unguarded on the host, which is what lets Fog push and
-  open PRs with credentials the agent cannot read.
+  open PRs with credentials the agent cannot read. `SetupCmd`/`ValidateCmd` run
+  via `runShell` and are also unfiltered — they are the user's own commands.
+- Adding a tool adapter means adding its env prefixes to `toolEnvPrefixes`, or
+  the tool loses its own credentials and fails looking like an auth error.
+  There is a test asserting every registered tool has an entry.
+- Prefer exact env names over prefixes when a prefix would over-admit: `NODE_`
+  would have allowed `NODE_AUTH_TOKEN` (an npm credential), so the Node vars are
+  listed individually.
 - `FOG_HOME` is denied **selectively**, never wholesale — session worktrees live
   under `FOG_HOME/repos`, so a blanket deny would lock the agent out of the code
   it was asked to edit. There is a regression test for this.

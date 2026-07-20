@@ -31,7 +31,7 @@ func (a *Antigravity) ExecuteStream(ctx context.Context, req ExecuteRequest, onC
 	}
 
 	streamArgs := buildAntigravityHeadlessArgs(req, true, true)
-	streamOutput, conversationID, streamErr := runJSONStreamingCommand(ctx, req.Workdir, cmdName, streamArgs, onChunk)
+	streamOutput, conversationID, streamErr := runJSONStreamingCommand(ctx, a.Name(), req.Workdir, cmdName, streamArgs, onChunk)
 	if streamErr == nil {
 		return &Result{
 			Success:        true,
@@ -43,7 +43,7 @@ func (a *Antigravity) ExecuteStream(ctx context.Context, req ExecuteRequest, onC
 	if looksLikeUnsupportedFlag(streamOutput) || streamOutput == "" {
 		// Retry without auto-approve, which is not supported by all versions.
 		retryArgs := buildAntigravityHeadlessArgs(req, true, false)
-		retryOutput, retryConversationID, retryErr := runJSONStreamingCommand(ctx, req.Workdir, cmdName, retryArgs, onChunk)
+		retryOutput, retryConversationID, retryErr := runJSONStreamingCommand(ctx, a.Name(), req.Workdir, cmdName, retryArgs, onChunk)
 		if retryErr == nil {
 			if retryConversationID == "" {
 				retryConversationID = conversationID
@@ -59,10 +59,10 @@ func (a *Antigravity) ExecuteStream(ctx context.Context, req ExecuteRequest, onC
 		}
 
 		fallbackArgs := buildAntigravityHeadlessArgs(req, false, true)
-		plainOutput, plainErr := runPlainStreamingCommand(ctx, req.Workdir, cmdName, fallbackArgs, onChunk)
+		plainOutput, plainErr := runPlainStreamingCommand(ctx, a.Name(), req.Workdir, cmdName, fallbackArgs, onChunk)
 		if plainErr != nil && (looksLikeUnsupportedFlag(plainOutput) || plainOutput == "") {
 			noApproveArgs := buildAntigravityHeadlessArgs(req, false, false)
-			plainOutput, plainErr = runPlainStreamingCommand(ctx, req.Workdir, cmdName, noApproveArgs, onChunk)
+			plainOutput, plainErr = runPlainStreamingCommand(ctx, a.Name(), req.Workdir, cmdName, noApproveArgs, onChunk)
 		}
 		return &Result{
 			Success:        plainErr == nil,

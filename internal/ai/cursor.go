@@ -31,7 +31,7 @@ func (c *Cursor) ExecuteStream(ctx context.Context, req ExecuteRequest, onChunk 
 	}
 
 	streamArgs := buildCursorHeadlessArgs(req, true)
-	streamOutput, conversationID, streamErr := runJSONStreamingCommand(ctx, req.Workdir, cmdName, streamArgs, onChunk)
+	streamOutput, conversationID, streamErr := runJSONStreamingCommand(ctx, c.Name(), req.Workdir, cmdName, streamArgs, onChunk)
 	if streamErr == nil {
 		return &Result{
 			Success:        true,
@@ -42,7 +42,7 @@ func (c *Cursor) ExecuteStream(ctx context.Context, req ExecuteRequest, onChunk 
 
 	if looksLikeUnsupportedFlag(streamOutput) || streamOutput == "" {
 		fallbackArgs := buildCursorHeadlessArgs(req, false)
-		plainOutput, plainErr := runPlainStreamingCommand(ctx, req.Workdir, cmdName, fallbackArgs, onChunk)
+		plainOutput, plainErr := runPlainStreamingCommand(ctx, c.Name(), req.Workdir, cmdName, fallbackArgs, onChunk)
 		return &Result{
 			Success:        plainErr == nil,
 			Output:         strings.TrimSpace(plainOutput),

@@ -60,6 +60,13 @@ func Run(ctx context.Context, dir, name string, args ...string) ([]byte, error) 
 
 // RunStreaming executes a command and emits output chunks as they arrive.
 func RunStreaming(ctx context.Context, dir, name string, onChunk func([]byte), args ...string) ([]byte, error) {
+	return RunStreamingEnv(ctx, dir, nil, name, onChunk, args...)
+}
+
+// RunStreamingEnv is RunStreaming with an explicit environment for the child
+// process. A nil env inherits the parent's; a non-nil env replaces it entirely,
+// including when empty.
+func RunStreamingEnv(ctx context.Context, dir string, env []string, name string, onChunk func([]byte), args ...string) ([]byte, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -69,6 +76,7 @@ func RunStreaming(ctx context.Context, dir, name string, onChunk func([]byte), a
 
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
+	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	stdout, err := cmd.StdoutPipe()

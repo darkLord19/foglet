@@ -84,9 +84,9 @@ func (p *streamJSONParser) ConversationID() string {
 	return strings.TrimSpace(p.conversationID)
 }
 
-func runJSONStreamingCommand(ctx context.Context, workdir, cmdName string, args []string, onChunk func(string)) (output, conversationID string, err error) {
+func runJSONStreamingCommand(ctx context.Context, toolName, workdir, cmdName string, args []string, onChunk func(string)) (output, conversationID string, err error) {
 	parser := newStreamJSONParser(onChunk)
-	raw, err := runGuardedStreaming(ctx, workdir, cmdName, parser.Feed, args)
+	raw, err := runGuardedStreaming(ctx, toolName, workdir, cmdName, parser.Feed, args)
 	parser.Close()
 
 	output = parser.Output()
@@ -96,9 +96,9 @@ func runJSONStreamingCommand(ctx context.Context, workdir, cmdName string, args 
 	return output, parser.ConversationID(), err
 }
 
-func runPlainStreamingCommand(ctx context.Context, workdir, cmdName string, args []string, onChunk func(string)) (string, error) {
+func runPlainStreamingCommand(ctx context.Context, toolName, workdir, cmdName string, args []string, onChunk func(string)) (string, error) {
 	var out bytes.Buffer
-	_, err := runGuardedStreaming(ctx, workdir, cmdName, func(chunk []byte) {
+	_, err := runGuardedStreaming(ctx, toolName, workdir, cmdName, func(chunk []byte) {
 		if len(chunk) == 0 {
 			return
 		}
