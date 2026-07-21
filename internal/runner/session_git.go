@@ -8,20 +8,23 @@ import (
 	"strings"
 
 	"github.com/darkLord19/foglet/internal/ghcli"
+	"github.com/darkLord19/foglet/internal/git"
 	"github.com/darkLord19/foglet/internal/proc"
 )
 
 func (r *Runner) commitSessionChanges(ctx context.Context, toolName, workdir, prompt, commitMsg string) (sha, finalMsg string, changed bool, err error) {
-	statusOut, err := proc.Run(ctx, workdir, "git", "status", "--porcelain")
+	g := git.New(workdir).WithContext(ctx)
+
+	dirty, err := g.IsDirty()
 	if err != nil {
-		return "", "", false, fmt.Errorf("git status failed: %w", withOutput(err, statusOut))
+		return "", "", false, fmt.Errorf("git status failed: %w", err)
 	}
-	if len(statusOut) == 0 {
+	if !dirty {
 		return "", "", false, nil
 	}
 
-	if output, err := proc.Run(ctx, workdir, "git", "add", "."); err != nil {
-		return "", "", false, fmt.Errorf("git add failed: %w", withOutput(err, output))
+	if err := g.StageAll(); err != nil {
+		return "", "", false, fmt.Errorf("git add failed: %w", err)
 	}
 
 	finalMsg = strings.TrimSpace(commitMsg)
@@ -37,26 +40,16 @@ func (r *Runner) commitSessionChanges(ctx context.Context, toolName, workdir, pr
 		}
 	}
 
-	if output, err := proc.Run(ctx, workdir, "git", "commit", "-m", finalMsg); err != nil {
-		return "", "", false, fmt.Errorf("git commit failed: %w", withOutput(err, output))
-	}
-
-	shaOut, err := proc.Run(ctx, workdir, "git", "rev-parse", "HEAD")
+	sha, err = g.Commit(finalMsg)
 	if err != nil {
-		return "", "", false, fmt.Errorf("git rev-parse failed: %w", withOutput(err, shaOut))
+		return "", "", false, fmt.Errorf("git commit failed: %w", err)
 	}
-
-	return strings.TrimSpace(string(shaOut)), finalMsg, true, nil
+	return sha, finalMsg, true, nil
 }
 
 func (r *Runner) pushBranch(ctx context.Context, workdir, branch string, setUpstream bool) error {
-	args := []string{"push", "origin", branch}
-	if setUpstream {
-		args = []string{"push", "-u", "origin", branch}
-	}
-	output, err := proc.Run(ctx, workdir, "git", args...)
-	if err != nil {
-		return fmt.Errorf("git %s failed: %w", strings.Join(args, " "), withOutput(err, output))
+	if err := git.New(workdir).WithContext(ctx).Push(branch, setUpstream); err != nil {
+		return fmt.Errorf("git push failed: %w", err)
 	}
 	return nil
 }

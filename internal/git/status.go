@@ -8,7 +8,7 @@ import (
 // GetStatus returns the git status for a worktree
 func (g *Git) GetStatus(worktreePath string) (*Status, error) {
 	// Create a new Git instance for the worktree
-	wtGit := New(worktreePath)
+	wtGit := New(worktreePath).WithContext(g.context())
 
 	status := &Status{
 		Clean: true,
@@ -47,7 +47,7 @@ func (g *Git) GetStatus(worktreePath string) (*Status, error) {
 
 // HasUncommittedChanges checks if there are uncommitted changes
 func (g *Git) HasUncommittedChanges(worktreePath string) (bool, error) {
-	wtGit := New(worktreePath)
+	wtGit := New(worktreePath).WithContext(g.context())
 	output, err := wtGit.exec("status", "--porcelain")
 	if err != nil {
 		return false, err
@@ -58,7 +58,7 @@ func (g *Git) HasUncommittedChanges(worktreePath string) (bool, error) {
 
 // GetBranch returns the current branch name
 func (g *Git) GetBranch(worktreePath string) (string, error) {
-	wtGit := New(worktreePath)
+	wtGit := New(worktreePath).WithContext(g.context())
 	output, err := wtGit.exec("rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		return "", err
@@ -69,7 +69,7 @@ func (g *Git) GetBranch(worktreePath string) (string, error) {
 
 // GetRemote returns remote tracking information
 func (g *Git) GetRemote(worktreePath string) (*Remote, error) {
-	wtGit := New(worktreePath)
+	wtGit := New(worktreePath).WithContext(g.context())
 
 	// Get remote name
 	remoteName, err := wtGit.exec("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")

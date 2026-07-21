@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/darkLord19/foglet/internal/git"
 )
 
 // Store manages worktree metadata
@@ -57,21 +57,11 @@ func New(repoPath string) (*Store, error) {
 }
 
 func resolveGitCommonDir(repoPath string) (string, error) {
-	cmd := exec.Command("git", "-C", repoPath, "rev-parse", "--git-common-dir")
-	output, err := cmd.CombinedOutput()
+	gitDir, err := git.New(repoPath).CommonDir()
 	if err != nil {
-		return "", fmt.Errorf("resolve git common dir: %w\n%s", err, strings.TrimSpace(string(output)))
+		return "", fmt.Errorf("resolve git common dir: %w", err)
 	}
-
-	gitDir := strings.TrimSpace(string(output))
-	if gitDir == "" {
-		return "", fmt.Errorf("resolve git common dir: empty output")
-	}
-
-	if !filepath.IsAbs(gitDir) {
-		gitDir = filepath.Join(repoPath, gitDir)
-	}
-	return filepath.Clean(gitDir), nil
+	return gitDir, nil
 }
 
 // Get retrieves all metadata

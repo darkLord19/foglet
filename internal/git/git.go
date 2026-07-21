@@ -1,20 +1,51 @@
 package git
 
 import (
+	"context"
 	"fmt"
-	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/darkLord19/foglet/internal/proc"
 )
 
-// Git wraps git operations for a repository
+// Git wraps git operations for a repository.
+//
+// Commands run through internal/proc, so they inherit its process-group
+// handling and SIGTERM-then-SIGKILL cancellation. A Git carries the context its
+// commands run under; use WithContext to bind one. Without it commands are
+// uncancellable, which is only appropriate for short-lived queries.
 type Git struct {
 	repoPath string
+	ctx      context.Context
 }
 
-// New creates a new Git instance for the given repository path
+// New creates a new Git instance for the given repository path.
+//
+// The returned Git runs commands under context.Background(). Callers on a
+// cancellable path — anything inside a session run — should use WithContext so
+// a cancelled run does not leave git processes behind.
 func New(repoPath string) *Git {
-	return &Git{repoPath: repoPath}
+	return &Git{repoPath: repoPath, ctx: context.Background()}
+}
+
+// WithContext returns a copy of g whose commands run under ctx.
+func (g *Git) WithContext(ctx context.Context) *Git {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	clone := *g
+	clone.ctx = ctx
+	return &clone
+}
+
+// context returns the bound context, tolerating a zero-value Git.
+func (g *Git) context() context.Context {
+	if g.ctx == nil {
+		return context.Background()
+	}
+	return g.ctx
 }
 
 // Worktree represents a git worktree
@@ -43,12 +74,9 @@ type Remote struct {
 	URL    string
 }
 
-// exec runs a git command and returns the output
+// exec runs a git command and returns its trimmed combined output.
 func (g *Git) exec(args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = g.repoPath
-
-	output, err := cmd.CombinedOutput()
+	output, err := proc.Run(g.context(), g.repoPath, "git", args...)
 	if err != nil {
 		return "", fmt.Errorf("git %s: %w\n%s", strings.Join(args, " "), err, string(output))
 	}
@@ -65,6 +93,23 @@ func (g *Git) IsRepo() bool {
 // GetRepoRoot returns the root directory of the repository
 func (g *Git) GetRepoRoot() (string, error) {
 	return g.exec("rev-parse", "--show-toplevel")
+}
+
+// CommonDir returns the repository's common git directory, resolved to an
+// absolute path. For a worktree this is the main repository's .git directory
+// rather than the worktree's own.
+func (g *Git) CommonDir() (string, error) {
+	gitDir, err := g.exec("rev-parse", "--git-common-dir")
+	if err != nil {
+		return "", err
+	}
+	if gitDir == "" {
+		return "", fmt.Errorf("resolve git common dir: empty output")
+	}
+	if !filepath.IsAbs(gitDir) {
+		gitDir = filepath.Join(g.repoPath, gitDir)
+	}
+	return filepath.Clean(gitDir), nil
 }
 
 // BranchExists checks if a local branch exists.

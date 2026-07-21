@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/darkLord19/foglet/internal/ai"
+	"github.com/darkLord19/foglet/internal/git"
 	"github.com/darkLord19/foglet/internal/proc"
 	"github.com/darkLord19/foglet/internal/state"
 )
@@ -106,26 +107,15 @@ func (r *Runner) generateCommitMessage(ctx context.Context, toolName, workdir, p
 }
 
 func stagedDiffSummary(ctx context.Context, workdir string) (string, error) {
-	nameStatusOut, err := proc.Run(ctx, workdir, "git", "diff", "--cached", "--name-status")
+	diff, err := git.New(workdir).WithContext(ctx).StagedChanges()
 	if err != nil {
-		return "", fmt.Errorf("git diff --name-status failed: %w", withOutput(err, nameStatusOut))
+		return "", err
 	}
 
-	statOut, err := proc.Run(ctx, workdir, "git", "diff", "--cached", "--stat")
-	if err != nil {
-		return "", fmt.Errorf("git diff --stat failed: %w", withOutput(err, statOut))
-	}
-
-	patchOut, err := proc.Run(ctx, workdir, "git", "diff", "--cached", "--no-color")
-	if err != nil {
-		return "", fmt.Errorf("git diff failed: %w", withOutput(err, patchOut))
-	}
-
-	trimmedPatch := truncate(strings.TrimSpace(string(patchOut)), 12000)
 	return strings.TrimSpace(
-		"Name status:\n" + strings.TrimSpace(string(nameStatusOut)) +
-			"\n\nStat:\n" + strings.TrimSpace(string(statOut)) +
-			"\n\nPatch (truncated):\n" + trimmedPatch,
+		"Name status:\n" + diff.NameStatus +
+			"\n\nStat:\n" + diff.Stat +
+			"\n\nPatch (truncated):\n" + truncate(diff.Patch, 12000),
 	), nil
 }
 
