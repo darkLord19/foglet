@@ -42,22 +42,3 @@ func TestParseCommandTextInvalidAutoPR(t *testing.T) {
 		t.Fatalf("expected invalid autopr error, got: %v", err)
 	}
 }
-
-func TestGenerateBranchName(t *testing.T) {
-	branch := generateBranchName("fog", "Add OTP login using Redis")
-	if !strings.HasPrefix(branch, "fog/") {
-		t.Fatalf("unexpected branch prefix: %s", branch)
-	}
-	if len(branch) > 255 {
-		t.Fatalf("branch exceeds max length: %d", len(branch))
-	}
-}
-
-func TestIsProtectedBranch(t *testing.T) {
-	if !isProtectedBranch("main") || !isProtectedBranch("master") {
-		t.Fatal("expected main/master to be protected")
-	}
-	if isProtectedBranch("feature/login") {
-		t.Fatal("did not expect feature branch to be protected")
-	}
-}

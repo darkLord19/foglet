@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/darkLord19/foglet/internal/state"
@@ -319,5 +320,55 @@ func TestRunnerBuiltFromFakesIsFullyFunctional(t *testing.T) {
 	}
 	if len(sessions) != 1 || sessions[0].ID != "s1" {
 		t.Errorf("ListSessions = %+v, want the seeded session", sessions)
+	}
+}
+
+func TestResolveLaunchRejectsProtectedBranchWhenAsked(t *testing.T) {
+	r := newLaunchRunner(launchRepos(), fakeSettings{})
+
+	req := validRequest()
+	req.BranchName = "main"
+	req.RejectProtectedBranch = true
+
+	_, err := r.resolveLaunch(req)
+	if !errors.Is(err, ErrInvalidLaunch) {
+		t.Fatalf("error = %v, want ErrInvalidLaunch", err)
+	}
+	if !strings.Contains(err.Error(), "protected") {
+		t.Errorf("error = %v, want it to mention the protected branch", err)
+	}
+}
+
+func TestResolveLaunchAllowsProtectedBranchByDefault(t *testing.T) {
+	// A launch from the desktop UI on this machine is trusted; only remote
+	// origins set the guard.
+	r := newLaunchRunner(launchRepos(), fakeSettings{})
+
+	req := validRequest()
+	req.BranchName = "main"
+
+	opts, err := r.resolveLaunch(req)
+	if err != nil {
+		t.Fatalf("resolveLaunch: %v", err)
+	}
+	if opts.Branch != "main" {
+		t.Errorf("Branch = %q, want main", opts.Branch)
+	}
+}
+
+func TestResolveLaunchProtectedGuardAppliesToDerivedBranches(t *testing.T) {
+	// The guard must run on the resolved name, not the requested one — a prompt
+	// that slugifies to a protected name must still be refused.
+	r := newLaunchRunner(fakeRepos{"acme/api": {Name: "acme/api"}}, fakeSettings{})
+
+	req := LaunchRequest{
+		RepoName:              "acme/api",
+		Prompt:                "main",
+		Tool:                  "claude",
+		BranchName:            "develop",
+		RejectProtectedBranch: true,
+	}
+	if _, err := r.resolveLaunch(req); !errors.Is(err, ErrInvalidLaunch) {
+		t.Fatalf("error = %v, want ErrInvalidLaunch", err)
 	}
 }

@@ -252,3 +252,16 @@ func truncateForMsg(s string) string {
 	}
 	return s
 }
+
+func TestIsProtected(t *testing.T) {
+	for _, name := range []string{"main", "master", "develop", "trunk", "MAIN", "  Master  "} {
+		if !IsProtected(name) {
+			t.Errorf("IsProtected(%q) = false, want true", name)
+		}
+	}
+	for _, name := range []string{"feature/login", "fog/add-otp", "maintenance", "", "main-ish"} {
+		if IsProtected(name) {
+			t.Errorf("IsProtected(%q) = true, want false", name)
+		}
+	}
+}

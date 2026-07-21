@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/darkLord19/foglet/internal/branchname"
 	"github.com/darkLord19/foglet/internal/state"
 	"github.com/darkLord19/foglet/internal/toolcfg"
 )
@@ -37,6 +38,13 @@ type LaunchRequest struct {
 	ValidateCmd string
 	CommitMsg   string
 	PRTitle     string
+
+	// RejectProtectedBranch refuses to run against an integration branch.
+	//
+	// Set it for launches that did not originate at this machine. A Slack
+	// command is issued by whoever is in the channel, so it must not be able to
+	// point an agent at main; a request from the desktop UI on this machine may.
+	RejectProtectedBranch bool
 
 	// Async schedules the run in the background and returns immediately.
 	Async bool
@@ -107,6 +115,9 @@ func (r *Runner) resolveLaunch(req LaunchRequest) (StartSessionOptions, error) {
 	branch, err := r.ResolveBranch(repo.BaseWorktreePath, req.BranchName, prompt)
 	if err != nil {
 		return StartSessionOptions{}, fmt.Errorf("%w: %s", ErrInvalidLaunch, err)
+	}
+	if req.RejectProtectedBranch && branchname.IsProtected(branch) {
+		return StartSessionOptions{}, fmt.Errorf("%w: protected branch %q is not allowed", ErrInvalidLaunch, branch)
 	}
 
 	return StartSessionOptions{

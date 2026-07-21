@@ -175,7 +175,7 @@ func (s *SocketMode) handleSlashEnvelope(raw json.RawMessage) {
 		return
 	}
 
-	session, run, err := s.handler.runner.StartSessionAsync(opts)
+	session, run, err := s.handler.runner.Launch(opts)
 	if err != nil {
 		s.sendWebhookError(payload.ResponseURL, err.Error())
 		return
@@ -256,7 +256,7 @@ func (s *SocketMode) handleEventsEnvelope(raw json.RawMessage) {
 		return
 	}
 
-	session, run, err := s.handler.runner.StartSessionAsync(opts)
+	session, run, err := s.handler.runner.Launch(opts)
 	if err != nil {
 		_, _ = s.postMessage(evt.Channel, rootTS, fmt.Sprintf("❌ %s", err.Error()))
 		return

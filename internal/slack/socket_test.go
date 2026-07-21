@@ -39,8 +39,8 @@ func TestCompletionTextFromSession(t *testing.T) {
 		PRURL:  "https://github.com/acme/repo/pull/1",
 	}
 	run := &state.Run{
-		State:      "COMPLETED",
-		CreatedAt:  start,
+		State:       "COMPLETED",
+		CreatedAt:   start,
 		CompletedAt: &end,
 	}
 	ok := completionTextFromSession(session, run)

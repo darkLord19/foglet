@@ -118,3 +118,17 @@ func withSuffix(base, suffix string) string {
 	}
 	return base + suffix
 }
+
+// IsProtected reports whether name is a branch Fog refuses to run an agent on.
+//
+// These are the conventional integration branches. The rule exists for launches
+// that did not originate at this machine — a Slack command, say — where writing
+// straight to the trunk is never the intent.
+func IsProtected(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "main", "master", "develop", "trunk":
+		return true
+	default:
+		return false
+	}
+}

@@ -9,7 +9,6 @@ import (
 
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
-	"github.com/darkLord19/foglet/internal/toolcfg"
 )
 
 // Handler handles Slack slash commands and interactions.
@@ -79,7 +78,7 @@ func (h *Handler) HandleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, run, err := h.runner.StartSessionAsync(opts)
+	session, run, err := h.runner.Launch(opts)
 	if err != nil {
 		h.sendErrorResponse(w, err.Error())
 		return
@@ -125,55 +124,23 @@ func isTerminalRunState(state string) bool {
 	}
 }
 
-func (h *Handler) buildSessionOptions(parsed *parsedCommand) (runner.StartSessionOptions, error) {
+func (h *Handler) buildSessionOptions(parsed *parsedCommand) (runner.LaunchRequest, error) {
 	if h.stateStore == nil {
-		return runner.StartSessionOptions{}, fmt.Errorf("state store is not configured")
+		return runner.LaunchRequest{}, fmt.Errorf("state store is not configured")
 	}
-
-	repo, found, err := h.stateStore.GetRepoByName(parsed.Repo)
-	if err != nil {
-		return runner.StartSessionOptions{}, err
-	}
-	if !found {
-		return runner.StartSessionOptions{}, fmt.Errorf("unknown repo: %s", parsed.Repo)
-	}
-	if strings.TrimSpace(repo.BaseWorktreePath) == "" {
-		return runner.StartSessionOptions{}, fmt.Errorf("repo %s has no base worktree path", parsed.Repo)
-	}
-
-	tool, err := toolcfg.ResolveTool(parsed.Tool, h.stateStore, "slack")
-	if err != nil {
-		return runner.StartSessionOptions{}, err
-	}
-
-	branch := strings.TrimSpace(parsed.BranchName)
-	if branch == "" {
-		branchPrefix := "fog"
-		if configured, ok, err := h.stateStore.GetSetting("branch_prefix"); err == nil && ok && strings.TrimSpace(configured) != "" {
-			branchPrefix = configured
-		}
-		branch = generateBranchName(branchPrefix, parsed.Prompt)
-	}
-
-	if isProtectedBranch(branch) {
-		return runner.StartSessionOptions{}, fmt.Errorf("protected branch %q is not allowed", branch)
-	}
-
-	baseBranch := strings.TrimSpace(repo.DefaultBranch)
-	if baseBranch == "" {
-		baseBranch = "main"
-	}
-
-	return runner.StartSessionOptions{
-		RepoName:   repo.Name,
-		RepoPath:   repo.BaseWorktreePath,
-		Branch:     branch,
-		Tool:       tool,
-		Model:      parsed.Model,
+	return runner.LaunchRequest{
+		Entrypoint: "slack",
+		RepoName:   parsed.Repo,
 		Prompt:     parsed.Prompt,
+		Tool:       parsed.Tool,
+		Model:      parsed.Model,
+		BranchName: parsed.BranchName,
 		AutoPR:     parsed.AutoPR,
-		BaseBranch: baseBranch,
 		CommitMsg:  parsed.CommitMsg,
+		// A Slack command is issued by whoever is in the channel, not by the
+		// person at this machine, so it may not target an integration branch.
+		RejectProtectedBranch: true,
+		Async:                 true,
 	}, nil
 }
 

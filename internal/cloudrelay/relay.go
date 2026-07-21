@@ -8,12 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/darkLord19/foglet/internal/branchname"
 	"github.com/darkLord19/foglet/internal/cloud"
-	"github.com/darkLord19/foglet/internal/git"
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
-	"github.com/darkLord19/foglet/internal/toolcfg"
 )
 
 type RelayConfig struct {
@@ -109,41 +106,17 @@ func (r *Relay) handleJob(job cloud.Job) CompletePayload {
 }
 
 func (r *Relay) handleStartSession(job cloud.Job) CompletePayload {
-	repo, found, err := r.stateStore.GetRepoByName(strings.TrimSpace(job.Repo))
-	if err != nil {
-		return CompletePayload{Success: false, Error: err.Error()}
-	}
-	if !found {
-		return CompletePayload{Success: false, Error: fmt.Sprintf("unknown repo: %s", strings.TrimSpace(job.Repo))}
-	}
-	if strings.TrimSpace(repo.BaseWorktreePath) == "" {
-		return CompletePayload{Success: false, Error: fmt.Sprintf("repo %s has no base worktree path", repo.Name)}
-	}
-
-	tool, err := toolcfg.ResolveTool(strings.TrimSpace(job.Tool), r.stateStore, "cloud")
-	if err != nil {
-		return CompletePayload{Success: false, Error: err.Error()}
-	}
-	branch, err := r.resolveBranchName(repo.BaseWorktreePath, strings.TrimSpace(job.BranchName), strings.TrimSpace(job.Prompt))
-	if err != nil {
-		return CompletePayload{Success: false, Error: err.Error()}
-	}
-
-	baseBranch := strings.TrimSpace(repo.DefaultBranch)
-	if baseBranch == "" {
-		baseBranch = "main"
-	}
-
-	session, run, err := r.runner.StartSession(runner.StartSessionOptions{
-		RepoName:   repo.Name,
-		RepoPath:   repo.BaseWorktreePath,
-		Branch:     branch,
-		Tool:       tool,
-		Model:      strings.TrimSpace(job.Model),
-		Prompt:     strings.TrimSpace(job.Prompt),
+	session, run, err := r.runner.Launch(runner.LaunchRequest{
+		Entrypoint: "cloud",
+		RepoName:   job.Repo,
+		Prompt:     job.Prompt,
+		Tool:       job.Tool,
+		Model:      job.Model,
+		BranchName: job.BranchName,
 		AutoPR:     job.AutoPR,
-		BaseBranch: baseBranch,
-		CommitMsg:  strings.TrimSpace(job.CommitMsg),
+		CommitMsg:  job.CommitMsg,
+		// A relayed job did not originate at this machine.
+		RejectProtectedBranch: true,
 	})
 	if err != nil {
 		return CompletePayload{Success: false, Error: err.Error()}
@@ -187,22 +160,4 @@ func (r *Relay) handleFollowUp(job cloud.Job) CompletePayload {
 		CommitSHA: strings.TrimSpace(run.CommitSHA),
 		CommitMsg: strings.TrimSpace(run.CommitMsg),
 	}
-}
-
-// resolveBranchName resolves a unique branch name for a relayed job.
-//
-// repoPath is the repository the branch will be created in; uniqueness is checked
-// against it. An empty repoPath disables the check.
-func (r *Relay) resolveBranchName(repoPath, requested, prompt string) (string, error) {
-	var exists func(string) bool
-	if strings.TrimSpace(repoPath) != "" {
-		exists = git.New(repoPath).BranchExists
-	}
-
-	prefix := ""
-	if stored, found, err := r.stateStore.GetSetting("branch_prefix"); err == nil && found {
-		prefix = strings.TrimSpace(stored)
-	}
-
-	return branchname.Resolve(requested, prefix, prompt, exists)
 }
