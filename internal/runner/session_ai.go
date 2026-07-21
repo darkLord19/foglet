@@ -23,7 +23,7 @@ func (r *Runner) runToolWithOptions(
 	toolName, workdir, prompt, model, conversationID string,
 	onChunk func(string),
 ) (string, string, error) {
-	tool, err := ai.GetTool(toolName)
+	tool, err := r.tools(toolName)
 	if err != nil {
 		return "", "", err
 	}
@@ -145,10 +145,10 @@ func normalizeCommitMessage(raw string) string {
 }
 
 func (r *Runner) generateForkSummary(sourceSession state.Session, forkPrompt, toolName string) (string, error) {
-	if r.state == nil {
+	if r.runs == nil {
 		return "", errors.New("state store not configured")
 	}
-	runs, err := r.state.ListRuns(sourceSession.ID)
+	runs, err := r.runs.ListRuns(sourceSession.ID)
 	if err != nil {
 		return "", err
 	}
@@ -156,7 +156,7 @@ func (r *Runner) generateForkSummary(sourceSession state.Session, forkPrompt, to
 		return "", nil
 	}
 	latest := runs[0]
-	events, err := r.state.ListRunEvents(latest.ID, 200)
+	events, err := r.runs.ListRunEvents(latest.ID, 200)
 	if err != nil {
 		return "", err
 	}

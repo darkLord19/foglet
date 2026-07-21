@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/darkLord19/foglet/internal/ai"
 	"github.com/darkLord19/foglet/internal/config"
 	"github.com/darkLord19/foglet/internal/git"
 	"github.com/darkLord19/foglet/internal/power"
@@ -15,23 +16,35 @@ import (
 
 // Runner orchestrates AI task execution
 type Runner struct {
-	repoPath  string
-	state     *state.Store
-	baseCtx   context.Context
-	power     *power.Inhibitor
-	mu        sync.Mutex
-	active    map[string]*activeRun
+	state    *state.Store
+	runs     RunStore
+	settings SettingsReader
+	tools    ToolFactory
+	baseCtx  context.Context
+	power    *power.Inhibitor
+	mu       sync.Mutex
+	active   map[string]*activeRun
 }
 
 // New creates a new runner. The state store st is optional (may be nil).
-func New(repoPath, configDir string, st *state.Store) (*Runner, error) {
-	return &Runner{
-		repoPath: repoPath,
-		state:    st,
-		baseCtx:  context.Background(),
-		power:    power.New(),
-		active:   make(map[string]*activeRun),
-	}, nil
+//
+// Every path that needs a repository takes it as an argument, so the runner holds
+// no repository of its own.
+func New(st *state.Store) *Runner {
+	r := &Runner{
+		state:   st,
+		tools:   ai.GetTool,
+		baseCtx: context.Background(),
+		power:   power.New(),
+		active:  make(map[string]*activeRun),
+	}
+	// Assigned only when non-nil: a nil *state.Store stored in an interface is
+	// itself non-nil, which would turn every nil-store guard into a panic.
+	if st != nil {
+		r.runs = st
+		r.settings = st
+	}
+	return r
 }
 
 // SetBaseContext replaces the default context.Background() used as the parent
@@ -42,10 +55,10 @@ func (r *Runner) SetBaseContext(ctx context.Context) {
 }
 
 func (r *Runner) keepAwakeEnabled() bool {
-	if r == nil || r.state == nil {
+	if r == nil || r.settings == nil {
 		return false
 	}
-	val, found, err := r.state.GetSetting("keep_awake")
+	val, found, err := r.settings.GetSetting("keep_awake")
 	if err != nil || !found {
 		return false
 	}

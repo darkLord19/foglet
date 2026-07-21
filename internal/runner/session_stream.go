@@ -10,13 +10,13 @@ import (
 
 type runStreamWriter struct {
 	mu        sync.Mutex
-	store     *state.Store
+	store     state.RunEventSink
 	runID     string
 	buffer    strings.Builder
 	lastFlush time.Time
 }
 
-func newRunStreamWriter(store *state.Store, runID string) *runStreamWriter {
+func newRunStreamWriter(store state.RunEventSink, runID string) *runStreamWriter {
 	return &runStreamWriter{
 		store:     store,
 		runID:     runID,

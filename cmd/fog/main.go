@@ -154,10 +154,7 @@ func runTask() error {
 	}
 
 	// Create runner
-	r, err := runner.New(repo.BaseWorktreePath, fogHome, stateStore)
-	if err != nil {
-		return err
-	}
+	r := runner.New(stateStore)
 
 	baseBranch := strings.TrimSpace(flagBaseBranch)
 	if baseBranch == "" {
@@ -219,10 +216,7 @@ func listSessions() error {
 	}
 	defer func() { _ = stateStore.Close() }()
 
-	r, err := runner.New("", fogHome, stateStore)
-	if err != nil {
-		return err
-	}
+	r := runner.New(stateStore)
 
 	sessions, err := r.ListSessions()
 	if err != nil {
@@ -269,10 +263,7 @@ func showSessionStatus(id string) error {
 	}
 	defer func() { _ = stateStore.Close() }()
 
-	r, err := runner.New("", fogHome, stateStore)
-	if err != nil {
-		return err
-	}
+	r := runner.New(stateStore)
 
 	session, found, err := r.GetSession(id)
 	if err != nil {

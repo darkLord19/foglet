@@ -64,7 +64,6 @@ func TestHandleSettingsPut(t *testing.T) {
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 
-	cfgDir := t.TempDir()
 
 	st, err := state.NewStore(t.TempDir())
 	if err != nil {
@@ -75,10 +74,7 @@ func newTestServer(t *testing.T) *Server {
 		t.Fatalf("set default tool failed: %v", err)
 	}
 
-	r, err := runner.New("", cfgDir, st)
-	if err != nil {
-		t.Fatalf("new runner failed: %v", err)
-	}
+	r := runner.New(st)
 
 	srv := New(r, st, 8080)
 	srv.skipToolCheck = true

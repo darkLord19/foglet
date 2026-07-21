@@ -17,10 +17,7 @@ func newCountingRunner(t *testing.T) (*Runner, *int, *int) {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 
-	r, err := New(t.TempDir(), t.TempDir(), st)
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
+	r := New(st)
 	var starts, stops int
 	r.power.SetAssertionHooks(func() { starts++ }, func() { stops++ })
 	return r, &starts, &stops

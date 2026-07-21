@@ -21,7 +21,9 @@ func TestNotificationsEnabledReadsSetting(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 
-	r := &Runner{state: store}
+	// Built through New so this also pins that New wires the SettingsReader seam
+	// to the store; a Runner literal that sets only `state` would read nothing.
+	r := New(store)
 	if r.notificationsEnabled() {
 		t.Fatal("expected notifications to be disabled when setting is missing")
 	}

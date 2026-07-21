@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"regexp"
 	"strings"
 
 	"github.com/darkLord19/foglet/internal/ghcli"
@@ -54,8 +54,7 @@ func (r *Runner) pushBranch(ctx context.Context, workdir, branch string, setUpst
 	if setUpstream {
 		args = []string{"push", "-u", "origin", branch}
 	}
-	argv := append([]string{"git"}, args...)
-	output, err := proc.Run(ctx, workdir, argv[0], argv[1:]...)
+	output, err := proc.Run(ctx, workdir, "git", args...)
 	if err != nil {
 		return fmt.Errorf("git %s failed: %w", strings.Join(args, " "), withOutput(err, output))
 	}
@@ -76,25 +75,6 @@ func (r *Runner) createDraftPR(ctx context.Context, workdir, baseBranch, branch,
 	return ghcli.CreatePRWithContext(ctx, workdir, title, body, baseBranch, branch, true)
 }
 
-func (r *Runner) detachWorktreeHead(worktreePath string) error {
-	worktreePath = strings.TrimSpace(worktreePath)
-	if worktreePath == "" {
-		return nil
-	}
-	if _, err := os.Stat(worktreePath); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("check worktree path %s: %w", worktreePath, err)
-	}
-
-	output, err := proc.Run(context.Background(), worktreePath, "git", "checkout", "--detach")
-	if err != nil {
-		return fmt.Errorf("detach worktree %s: %w", worktreePath, withOutput(err, output))
-	}
-	return nil
-}
-
 func withOutput(err error, output []byte) error {
 	if err == nil {
 		return nil
@@ -109,6 +89,8 @@ func withOutput(err error, output []byte) error {
 func isCanceledError(err error) bool {
 	return errors.Is(err, proc.ErrCanceled) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
+
+var nonWorktreeNameChar = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
 func runWorktreeName(branch, runID string) string {
 	branch = nonWorktreeNameChar.ReplaceAllString(strings.TrimSpace(branch), "-")

@@ -489,10 +489,10 @@ func (r *Runner) CancelSessionLatestRun(sessionID string) (state.Run, error) {
 }
 
 func (r *Runner) lookupConversationID(sessionID, currentRunID string) string {
-	if r.state == nil {
+	if r.runs == nil {
 		return ""
 	}
-	runs, err := r.state.ListRuns(sessionID)
+	runs, err := r.runs.ListRuns(sessionID)
 	if err != nil {
 		return ""
 	}
@@ -500,7 +500,7 @@ func (r *Runner) lookupConversationID(sessionID, currentRunID string) string {
 		if strings.TrimSpace(run.ID) == strings.TrimSpace(currentRunID) {
 			continue
 		}
-		events, err := r.state.ListRunEvents(run.ID, 200)
+		events, err := r.runs.ListRunEvents(run.ID, 200)
 		if err != nil {
 			continue
 		}

@@ -35,11 +35,7 @@ func Build(ctx context.Context, opts BuildOpts) (*App, error) {
 	}
 
 	// 2. Create runner with state store
-	r, err := runner.New(opts.Cwd, opts.FogHome, store)
-	if err != nil {
-		store.Close()
-		return nil, err
-	}
+	r := runner.New(store)
 	r.SetBaseContext(ctx)
 
 	// 3. Create API server

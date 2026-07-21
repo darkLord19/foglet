@@ -23,10 +23,7 @@ func TestCreateWorktreePathWithNameHasExplicitBase(t *testing.T) {
 		t.Fatalf("write config file: %v", err)
 	}
 
-	r, err := New(repo, t.TempDir(), nil)
-	if err != nil {
-		t.Fatalf("New returned error: %v", err)
-	}
+	r := New(nil)
 
 	wtPath, err := r.createWorktreePathWithName(repo, "feature", "feature", baseBranch)
 	if err != nil {
@@ -61,10 +58,7 @@ func TestCreateWorktreePathWithNameAllowsEmptyBaseForExistingBranch(t *testing.T
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	r, err := New(repo, t.TempDir(), nil)
-	if err != nil {
-		t.Fatalf("New returned error: %v", err)
-	}
+	r := New(nil)
 
 	wtPath, err := r.createWorktreePathWithName(repo, "existing-wt", "existing", "")
 	if err != nil {
@@ -72,19 +66,6 @@ func TestCreateWorktreePathWithNameAllowsEmptyBaseForExistingBranch(t *testing.T
 	}
 	if _, err := os.Stat(wtPath); err != nil {
 		t.Fatalf("expected worktree path to exist: %v", err)
-	}
-}
-
-func TestNewAllowsNonRepoPath(t *testing.T) {
-	storeDir := t.TempDir()
-	nonRepo := t.TempDir()
-
-	r, err := New(nonRepo, storeDir, nil)
-	if err != nil {
-		t.Fatalf("New returned error for non-repo path: %v", err)
-	}
-	if r == nil {
-		t.Fatal("expected runner instance")
 	}
 }
 

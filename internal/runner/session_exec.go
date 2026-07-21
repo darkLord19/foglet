@@ -4,14 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/darkLord19/foglet/internal/state"
 	"github.com/darkLord19/foglet/internal/util"
 )
-
-var nonWorktreeNameChar = regexp.MustCompile(`[^a-zA-Z0-9._-]+`)
 
 const commitMsgInstructions = `
 
@@ -41,9 +38,20 @@ type sessionRunOptions struct {
 }
 
 func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts sessionRunOptions) (retErr error) {
-	if r.state == nil {
+	if r.runs == nil {
 		return errors.New("state store not configured")
 	}
+
+	// The caller marked the session busy before handing it over, so from here
+	// every exit must release it. This defer is installed before the argument
+	// checks below: returning from one of them without clearing the flag used to
+	// wedge the session permanently, since follow-ups reject a busy session.
+	defer func() {
+		if err := r.runs.SetSessionBusy(session.ID, false); err != nil && retErr == nil {
+			retErr = err
+		}
+	}()
+
 	if strings.TrimSpace(opts.BaseBranch) == "" {
 		return errors.New("base branch is required")
 	}
@@ -58,9 +66,6 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 	defer func() {
 		r.clearActiveRun(session.ID, run.ID)
 		cancel()
-		if err := r.state.SetSessionBusy(session.ID, false); err != nil && retErr == nil {
-			retErr = err
-		}
 	}()
 
 	fail := func(phase string, err error) error {
@@ -72,12 +77,12 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 			eventType = "cancelled"
 			message = phase + ": canceled"
 		}
-		_ = r.state.AppendRunEvent(state.RunEvent{
+		_ = r.runs.AppendRunEvent(state.RunEvent{
 			RunID:   run.ID,
 			Type:    eventType,
 			Message: message,
 		})
-		_ = r.state.CompleteRun(run.ID, terminalState, "", "", err.Error())
+		_ = r.runs.CompleteRun(run.ID, terminalState, "", "", err.Error())
 		_ = r.updateSessionStatusIfLatest(session.ID, run.ID, terminalState)
 		if r.notificationsEnabled() {
 			title := "Fog Session Failed"
@@ -95,7 +100,7 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 		if err := r.setRunPhase(session.ID, run.ID, "SETUP"); err != nil {
 			return err
 		}
-		_ = r.state.AppendRunEvent(state.RunEvent{
+		_ = r.runs.AppendRunEvent(state.RunEvent{
 			RunID:   run.ID,
 			Type:    "setup",
 			Message: "Running setup command",
@@ -108,12 +113,12 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 	if err := r.setRunPhase(session.ID, run.ID, "AI_RUNNING"); err != nil {
 		return err
 	}
-	_ = r.state.AppendRunEvent(state.RunEvent{
+	_ = r.runs.AppendRunEvent(state.RunEvent{
 		RunID:   run.ID,
 		Type:    "ai_start",
 		Message: "Running AI tool",
 	})
-	streamWriter := newRunStreamWriter(r.state, run.ID)
+	streamWriter := newRunStreamWriter(r.runs, run.ID)
 	conversationID := r.lookupConversationID(session.ID, run.ID)
 	aiOutput, nextConversationID, err := r.runToolWithOptions(
 		ctx,
@@ -127,7 +132,7 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 	streamWriter.Flush()
 	if err != nil {
 		if strings.TrimSpace(aiOutput) != "" {
-			_ = r.state.AppendRunEvent(state.RunEvent{
+			_ = r.runs.AppendRunEvent(state.RunEvent{
 				RunID:   run.ID,
 				Type:    "ai_output",
 				Message: truncate(aiOutput, 8000),
@@ -136,14 +141,14 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 		return fail("ai", err)
 	}
 	if nextConversationID != "" {
-		_ = r.state.AppendRunEvent(state.RunEvent{
+		_ = r.runs.AppendRunEvent(state.RunEvent{
 			RunID: run.ID,
 			Type:  "ai_session",
 			Data:  nextConversationID,
 		})
 	}
 	if strings.TrimSpace(aiOutput) != "" {
-		_ = r.state.AppendRunEvent(state.RunEvent{
+		_ = r.runs.AppendRunEvent(state.RunEvent{
 			RunID:   run.ID,
 			Type:    "ai_output",
 			Message: truncate(aiOutput, 8000),
@@ -173,7 +178,7 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 		return fail("commit", err)
 	}
 	if !changed {
-		_ = r.state.AppendRunEvent(state.RunEvent{
+		_ = r.runs.AppendRunEvent(state.RunEvent{
 			RunID:   run.ID,
 			Type:    "commit",
 			Message: "No changes to commit",
@@ -191,11 +196,11 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 			if err != nil {
 				return fail("create-pr", err)
 			}
-			if err := r.state.SetSessionPRURL(session.ID, prURL); err != nil {
+			if err := r.runs.SetSessionPRURL(session.ID, prURL); err != nil {
 				return fail("store-pr", err)
 			}
 			session.PRURL = prURL
-			_ = r.state.AppendRunEvent(state.RunEvent{
+			_ = r.runs.AppendRunEvent(state.RunEvent{
 				RunID:   run.ID,
 				Type:    "pr",
 				Message: "Draft PR created: " + prURL,
@@ -203,13 +208,13 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 		}
 	}
 
-	if err := r.state.CompleteRun(run.ID, "COMPLETED", commitSHA, commitMsg, ""); err != nil {
+	if err := r.runs.CompleteRun(run.ID, "COMPLETED", commitSHA, commitMsg, ""); err != nil {
 		return err
 	}
 	if err := r.updateSessionStatusIfLatest(session.ID, run.ID, "COMPLETED"); err != nil {
 		return err
 	}
-	_ = r.state.AppendRunEvent(state.RunEvent{
+	_ = r.runs.AppendRunEvent(state.RunEvent{
 		RunID:   run.ID,
 		Type:    "complete",
 		Message: "Run completed",
@@ -222,21 +227,21 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 }
 
 func (r *Runner) setRunPhase(sessionID, runID, phase string) error {
-	if err := r.state.SetRunState(runID, phase); err != nil {
+	if err := r.runs.SetRunState(runID, phase); err != nil {
 		return err
 	}
 	return r.updateSessionStatusIfLatest(sessionID, runID, phase)
 }
 
 func (r *Runner) updateSessionStatusIfLatest(sessionID, runID, status string) error {
-	latest, found, err := r.state.GetLatestRun(sessionID)
+	latest, found, err := r.runs.GetLatestRun(sessionID)
 	if err != nil {
 		return err
 	}
 	if !found || latest.ID != strings.TrimSpace(runID) {
 		return nil
 	}
-	return r.state.UpdateSessionStatus(sessionID, status)
+	return r.runs.UpdateSessionStatus(sessionID, status)
 }
 
 func (r *Runner) registerActiveRun(sessionID, runID string, cancel context.CancelFunc) {

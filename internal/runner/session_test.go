@@ -9,12 +9,9 @@ import (
 )
 
 func TestStartSessionRequiresStateStore(t *testing.T) {
-	r, err := New(t.TempDir(), t.TempDir(), nil)
-	if err != nil {
-		t.Fatalf("new runner failed: %v", err)
-	}
+	r := New(nil)
 
-	_, _, err = r.StartSession(StartSessionOptions{
+	_, _, err := r.StartSession(StartSessionOptions{
 		RepoName: "acme/api",
 		RepoPath: t.TempDir(),
 		Branch:   "fog/test",
@@ -33,10 +30,7 @@ func TestStartSessionValidatesRequiredFields(t *testing.T) {
 	}
 	defer func() { _ = st.Close() }()
 
-	r, err := New(t.TempDir(), t.TempDir(), st)
-	if err != nil {
-		t.Fatalf("new runner failed: %v", err)
-	}
+	r := New(st)
 
 	_, _, err = r.StartSession(StartSessionOptions{
 		RepoName: "acme/api",
@@ -57,10 +51,7 @@ func TestContinueSessionRejectsBusySession(t *testing.T) {
 	}
 	defer func() { _ = st.Close() }()
 
-	r, err := New(t.TempDir(), t.TempDir(), st)
-	if err != nil {
-		t.Fatalf("new runner failed: %v", err)
-	}
+	r := New(st)
 
 	if _, err := st.UpsertRepo(state.Repo{
 		Name:             "acme/api",
@@ -103,10 +94,7 @@ func TestPrepareFollowUpRunReusesSessionWorktree(t *testing.T) {
 	}
 	defer func() { _ = st.Close() }()
 
-	r, err := New(t.TempDir(), t.TempDir(), st)
-	if err != nil {
-		t.Fatalf("new runner failed: %v", err)
-	}
+	r := New(st)
 
 	if _, err := st.UpsertRepo(state.Repo{
 		Name:             "acme/api",
@@ -189,10 +177,7 @@ func TestCancelSessionLatestRunCancelsActiveLatestRun(t *testing.T) {
 	}
 	defer func() { _ = st.Close() }()
 
-	r, err := New(t.TempDir(), t.TempDir(), st)
-	if err != nil {
-		t.Fatalf("new runner failed: %v", err)
-	}
+	r := New(st)
 
 	if _, err := st.UpsertRepo(state.Repo{
 		Name:             "acme/api",
@@ -261,10 +246,7 @@ func TestLookupConversationIDFindsLatestPriorRunSessionID(t *testing.T) {
 	}
 	defer func() { _ = st.Close() }()
 
-	r, err := New(t.TempDir(), t.TempDir(), st)
-	if err != nil {
-		t.Fatalf("new runner failed: %v", err)
-	}
+	r := New(st)
 
 	if _, err := st.UpsertRepo(state.Repo{
 		Name:             "acme/api",
