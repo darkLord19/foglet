@@ -17,13 +17,6 @@ func (a *Antigravity) IsAvailable() bool {
 	return antigravityCommand() != ""
 }
 
-func (a *Antigravity) Execute(ctx context.Context, workdir, prompt string) (*Result, error) {
-	return a.ExecuteStream(ctx, ExecuteRequest{
-		Workdir: workdir,
-		Prompt:  prompt,
-	}, nil)
-}
-
 func (a *Antigravity) ExecuteStream(ctx context.Context, req ExecuteRequest, onChunk func(string)) (*Result, error) {
 	cmdName := antigravityCommand()
 	if cmdName == "" {

@@ -17,13 +17,6 @@ func (c *Cursor) IsAvailable() bool {
 	return cursorAgentCommand() != ""
 }
 
-func (c *Cursor) Execute(ctx context.Context, workdir, prompt string) (*Result, error) {
-	return c.ExecuteStream(ctx, ExecuteRequest{
-		Workdir: workdir,
-		Prompt:  prompt,
-	}, nil)
-}
-
 func (c *Cursor) ExecuteStream(ctx context.Context, req ExecuteRequest, onChunk func(string)) (*Result, error) {
 	cmdName := cursorAgentCommand()
 	if cmdName == "" {

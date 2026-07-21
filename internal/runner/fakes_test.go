@@ -317,10 +317,6 @@ type fakeTool struct {
 func (f *fakeTool) Name() string      { return f.name }
 func (f *fakeTool) IsAvailable() bool { return f.available }
 
-func (f *fakeTool) Execute(ctx context.Context, workdir, prompt string) (*ai.Result, error) {
-	return f.ExecuteStream(ctx, ai.ExecuteRequest{Workdir: workdir, Prompt: prompt}, nil)
-}
-
 func (f *fakeTool) ExecuteStream(ctx context.Context, req ai.ExecuteRequest, onChunk func(string)) (*ai.Result, error) {
 	f.mu.Lock()
 	f.gotRequest = req

@@ -32,7 +32,7 @@ func (r *Runner) runToolWithOptions(
 		return "", "", fmt.Errorf("AI tool %s not available", toolName)
 	}
 
-	result, err := ai.ExecuteWithOptionalStream(ctx, tool, ai.ExecuteRequest{
+	result, err := tool.ExecuteStream(ctx, ai.ExecuteRequest{
 		Workdir:        workdir,
 		Prompt:         prompt,
 		Model:          model,

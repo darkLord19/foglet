@@ -13,16 +13,19 @@ import (
 	"github.com/darkLord19/foglet/internal/binpath"
 )
 
-// Tool represents an AI coding tool
+// Tool represents an AI coding tool.
+//
+// There was briefly a second interface here: Tool carried a non-streaming
+// Execute, StreamTool embedded it and added ExecuteStream, and a helper
+// type-asserted between them. Every adapter implemented both, Execute was an
+// arity adapter that called ExecuteStream with a nil callback, and no caller
+// ever wanted the non-streaming form. One shape of adapter behind a seam is a
+// hypothetical seam, so the two collapsed into one.
+//
+// onChunk may be nil when the caller does not want incremental output.
 type Tool interface {
 	Name() string
 	IsAvailable() bool
-	Execute(ctx context.Context, workdir, prompt string) (*Result, error)
-}
-
-// StreamTool is implemented by tools that support incremental output streaming.
-type StreamTool interface {
-	Tool
 	ExecuteStream(ctx context.Context, req ExecuteRequest, onChunk func(string)) (*Result, error)
 }
 
@@ -87,18 +90,6 @@ func AvailableToolNames() []string {
 	return []string{"cursor", "claude", "antigravity"}
 }
 
-// ExecuteWithOptionalStream runs a tool and streams chunks when supported.
-func ExecuteWithOptionalStream(ctx context.Context, tool Tool, req ExecuteRequest, onChunk func(string)) (*Result, error) {
-	if streamTool, ok := tool.(StreamTool); ok {
-		return streamTool.ExecuteStream(ctx, req, onChunk)
-	}
-	result, err := tool.Execute(ctx, req.Workdir, req.Prompt)
-	if onChunk != nil && result != nil && strings.TrimSpace(result.Output) != "" {
-		onChunk(result.Output)
-	}
-	return result, err
-}
-
 func normalizeToolName(name string) string {
 	value := strings.ToLower(strings.TrimSpace(name))
 	switch value {
@@ -151,5 +142,3 @@ func commandPath(name string) string {
 	commandPathCache.Store(name, "")
 	return ""
 }
-
-

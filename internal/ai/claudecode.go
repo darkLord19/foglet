@@ -17,13 +17,6 @@ func (c *ClaudeCode) IsAvailable() bool {
 	return commandExists("claude") || commandExists("claude-code")
 }
 
-func (c *ClaudeCode) Execute(ctx context.Context, workdir, prompt string) (*Result, error) {
-	return c.ExecuteStream(ctx, ExecuteRequest{
-		Workdir: workdir,
-		Prompt:  prompt,
-	}, nil)
-}
-
 func (c *ClaudeCode) ExecuteStream(ctx context.Context, req ExecuteRequest, onChunk func(string)) (*Result, error) {
 	if !c.IsAvailable() {
 		return nil, fmt.Errorf("claude not available")
