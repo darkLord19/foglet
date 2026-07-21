@@ -5,17 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"regexp"
 	"strings"
 	"time"
 
+	"github.com/darkLord19/foglet/internal/branchname"
 	"github.com/darkLord19/foglet/internal/cloud"
+	"github.com/darkLord19/foglet/internal/git"
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
 	"github.com/darkLord19/foglet/internal/toolcfg"
 )
-
-var nonBranchSlugChar = regexp.MustCompile(`[^a-z0-9]+`)
 
 type RelayConfig struct {
 	PollInterval time.Duration
@@ -125,7 +124,7 @@ func (r *Relay) handleStartSession(job cloud.Job) CompletePayload {
 	if err != nil {
 		return CompletePayload{Success: false, Error: err.Error()}
 	}
-	branch, err := r.resolveBranchName(strings.TrimSpace(job.BranchName), strings.TrimSpace(job.Prompt))
+	branch, err := r.resolveBranchName(repo.BaseWorktreePath, strings.TrimSpace(job.BranchName), strings.TrimSpace(job.Prompt))
 	if err != nil {
 		return CompletePayload{Success: false, Error: err.Error()}
 	}
@@ -190,52 +189,20 @@ func (r *Relay) handleFollowUp(job cloud.Job) CompletePayload {
 	}
 }
 
-func (r *Relay) resolveBranchName(requested, prompt string) (string, error) {
-	requested = strings.TrimSpace(requested)
-	if requested != "" {
-		return validateBranchName(requested)
+// resolveBranchName resolves a unique branch name for a relayed job.
+//
+// repoPath is the repository the branch will be created in; uniqueness is checked
+// against it. An empty repoPath disables the check.
+func (r *Relay) resolveBranchName(repoPath, requested, prompt string) (string, error) {
+	var exists func(string) bool
+	if strings.TrimSpace(repoPath) != "" {
+		exists = git.New(repoPath).BranchExists
 	}
-	prefix := "fog"
+
+	prefix := ""
 	if stored, found, err := r.stateStore.GetSetting("branch_prefix"); err == nil && found {
-		stored = strings.TrimSpace(stored)
-		if stored != "" {
-			prefix = stored
-		}
+		prefix = strings.TrimSpace(stored)
 	}
-	slug := slugifyPrompt(prompt)
-	branch := strings.Trim(prefix, "/") + "/" + slug
-	if len(branch) > 255 {
-		branch = strings.Trim(branch[:255], "/.-")
-	}
-	return validateBranchName(branch)
-}
 
-func validateBranchName(value string) (string, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "", fmt.Errorf("branch name cannot be empty")
-	}
-	if len(value) > 255 {
-		return "", fmt.Errorf("branch name exceeds 255 characters")
-	}
-	if strings.HasPrefix(value, "/") || strings.HasSuffix(value, "/") {
-		return "", fmt.Errorf("branch name cannot start or end with '/'")
-	}
-	if strings.Contains(value, "..") || strings.Contains(value, "//") || strings.Contains(value, "@{") {
-		return "", fmt.Errorf("branch name contains invalid sequence")
-	}
-	if strings.ContainsAny(value, " ~^:?*[\\") {
-		return "", fmt.Errorf("branch name contains invalid character")
-	}
-	return value, nil
-}
-
-func slugifyPrompt(prompt string) string {
-	slug := strings.ToLower(strings.TrimSpace(prompt))
-	slug = nonBranchSlugChar.ReplaceAllString(slug, "-")
-	slug = strings.Trim(slug, "-")
-	if slug == "" {
-		return "task-" + time.Now().UTC().Format("20060102150405")
-	}
-	return slug
+	return branchname.Resolve(requested, prefix, prompt, exists)
 }
