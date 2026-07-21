@@ -227,7 +227,7 @@ func (r *Runner) prepareFollowUpRun(sessionID, prompt string) (state.Session, st
 		return state.Session{}, state.Run{}, sessionRunOptions{}, err
 	}
 	if !found {
-		return state.Session{}, state.Run{}, sessionRunOptions{}, fmt.Errorf("session %q not found", sessionID)
+		return state.Session{}, state.Run{}, sessionRunOptions{}, fmt.Errorf("session %q: %w", sessionID, state.ErrNotFound)
 	}
 	if session.Busy {
 		return state.Session{}, state.Run{}, sessionRunOptions{}, fmt.Errorf("session %q is busy", sessionID)
@@ -302,7 +302,7 @@ func (r *Runner) prepareForkSession(sourceSessionID string, opts ForkSessionOpti
 		return StartSessionOptions{}, state.Session{}, err
 	}
 	if !found {
-		return StartSessionOptions{}, state.Session{}, fmt.Errorf("session %q not found", sourceSessionID)
+		return StartSessionOptions{}, state.Session{}, fmt.Errorf("session %q: %w", sourceSessionID, state.ErrNotFound)
 	}
 	if sourceSession.Busy {
 		return StartSessionOptions{}, state.Session{}, fmt.Errorf("session %q is busy", sourceSessionID)
@@ -317,7 +317,7 @@ func (r *Runner) prepareForkSession(sourceSessionID string, opts ForkSessionOpti
 		return StartSessionOptions{}, state.Session{}, err
 	}
 	if !found {
-		return StartSessionOptions{}, state.Session{}, fmt.Errorf("repo %q not found", sourceSession.RepoName)
+		return StartSessionOptions{}, state.Session{}, fmt.Errorf("repo %q: %w", sourceSession.RepoName, state.ErrNotFound)
 	}
 	if strings.TrimSpace(repo.BaseWorktreePath) == "" {
 		return StartSessionOptions{}, state.Session{}, fmt.Errorf("repo %q has no base worktree path", sourceSession.RepoName)
@@ -453,7 +453,7 @@ func (r *Runner) CancelSessionLatestRun(sessionID string) (state.Run, error) {
 		return state.Run{}, err
 	}
 	if !found {
-		return state.Run{}, fmt.Errorf("session %q not found", sessionID)
+		return state.Run{}, fmt.Errorf("session %q: %w", sessionID, state.ErrNotFound)
 	}
 
 	latest, found, err := r.state.GetLatestRun(session.ID)

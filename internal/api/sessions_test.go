@@ -267,3 +267,32 @@ func TestResolveBranchName_Unique(t *testing.T) {
 	}
 	t.Logf("Resolved unique branch: %s", uniqueName)
 }
+
+// Regression: cancel used to decide 404 vs 400 by substring-matching the error
+// message. It now matches state.ErrNotFound, which only works because the
+// runner wraps that sentinel rather than formatting its own "not found" string.
+func TestCancelUnknownSessionReturns404(t *testing.T) {
+	srv := newTestServer(t)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/sessions/does-not-exist/cancel", nil)
+	w := httptest.NewRecorder()
+	srv.handleSessionDetail(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d (body=%s)", w.Code, http.StatusNotFound, w.Body.String())
+	}
+}
+
+// A session that exists but has no cancellable run is a bad request, not a 404.
+func TestCancelSessionWithoutActiveRunReturns400(t *testing.T) {
+	srv := newTestServer(t)
+	seedSessionFixture(t, srv)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/sessions/session-1/cancel", nil)
+	w := httptest.NewRecorder()
+	srv.handleSessionDetail(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d (body=%s)", w.Code, http.StatusBadRequest, w.Body.String())
+	}
+}

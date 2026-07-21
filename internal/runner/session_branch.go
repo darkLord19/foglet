@@ -7,6 +7,7 @@ import (
 
 	"github.com/darkLord19/foglet/internal/branchname"
 	"github.com/darkLord19/foglet/internal/git"
+	"github.com/darkLord19/foglet/internal/state"
 )
 
 // ResolveBranch resolves a unique branch name for a session.
@@ -39,7 +40,7 @@ func (r *Runner) SessionDiff(sessionID string) (diffStat, diffPatch string, err 
 		return "", "", err
 	}
 	if !found {
-		return "", "", fmt.Errorf("session %q not found", sessionID)
+		return "", "", fmt.Errorf("session %q: %w", sessionID, state.ErrNotFound)
 	}
 
 	repo, found, err := r.state.GetRepoByName(session.RepoName)
@@ -47,7 +48,7 @@ func (r *Runner) SessionDiff(sessionID string) (diffStat, diffPatch string, err 
 		return "", "", err
 	}
 	if !found {
-		return "", "", fmt.Errorf("repo %q not found", session.RepoName)
+		return "", "", fmt.Errorf("repo %q: %w", session.RepoName, state.ErrNotFound)
 	}
 
 	worktreePath := strings.TrimSpace(session.WorktreePath)

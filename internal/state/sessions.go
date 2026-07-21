@@ -119,55 +119,25 @@ func (s *Store) GetSession(id string) (Session, bool, error) {
 		return Session{}, false, errors.New("session id cannot be empty")
 	}
 
-	var session Session
-	var autoPR int
-	var busy int
-	var createdAtRaw string
-	var updatedAtRaw string
-	err := s.db.QueryRow(
-		`SELECT id, repo_name, branch, worktree_path, tool, model, autopr, pr_url, status, busy, created_at, updated_at
+	session, err := scanSession(s.db.QueryRow(
+		`SELECT `+sessionColumns+`
 		   FROM sessions
 		  WHERE id = ?`,
 		id,
-	).Scan(
-		&session.ID,
-		&session.RepoName,
-		&session.Branch,
-		&session.WorktreePath,
-		&session.Tool,
-		&session.Model,
-		&autoPR,
-		&session.PRURL,
-		&session.Status,
-		&busy,
-		&createdAtRaw,
-		&updatedAtRaw,
-	)
+	))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Session{}, false, nil
 	}
 	if err != nil {
 		return Session{}, false, fmt.Errorf("get session %q: %w", id, err)
 	}
-
-	session.AutoPR = autoPR == 1
-	session.Busy = busy == 1
-	session.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAtRaw)
-	if err != nil {
-		return Session{}, false, fmt.Errorf("parse session created_at %q: %w", id, err)
-	}
-	session.UpdatedAt, err = time.Parse(time.RFC3339Nano, updatedAtRaw)
-	if err != nil {
-		return Session{}, false, fmt.Errorf("parse session updated_at %q: %w", id, err)
-	}
-
 	return session, true, nil
 }
 
 // ListSessions returns all sessions sorted by most recently updated first.
 func (s *Store) ListSessions() ([]Session, error) {
 	rows, err := s.db.Query(
-		`SELECT id, repo_name, branch, worktree_path, tool, model, autopr, pr_url, status, busy, created_at, updated_at
+		`SELECT ` + sessionColumns + `
 		   FROM sessions
 		  ORDER BY updated_at DESC`,
 	)
@@ -178,36 +148,9 @@ func (s *Store) ListSessions() ([]Session, error) {
 
 	sessions := make([]Session, 0)
 	for rows.Next() {
-		var session Session
-		var autoPR int
-		var busy int
-		var createdAtRaw string
-		var updatedAtRaw string
-		if err := rows.Scan(
-			&session.ID,
-			&session.RepoName,
-			&session.Branch,
-			&session.WorktreePath,
-			&session.Tool,
-			&session.Model,
-			&autoPR,
-			&session.PRURL,
-			&session.Status,
-			&busy,
-			&createdAtRaw,
-			&updatedAtRaw,
-		); err != nil {
+		session, err := scanSession(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan session: %w", err)
-		}
-		session.AutoPR = autoPR == 1
-		session.Busy = busy == 1
-		session.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAtRaw)
-		if err != nil {
-			return nil, fmt.Errorf("parse session created_at %q: %w", session.ID, err)
-		}
-		session.UpdatedAt, err = time.Parse(time.RFC3339Nano, updatedAtRaw)
-		if err != nil {
-			return nil, fmt.Errorf("parse session updated_at %q: %w", session.ID, err)
 		}
 		sessions = append(sessions, session)
 	}
@@ -387,51 +330,18 @@ func (s *Store) GetRun(id string) (Run, bool, error) {
 		return Run{}, false, errors.New("run id cannot be empty")
 	}
 
-	var run Run
-	var createdAtRaw string
-	var updatedAtRaw string
-	var completedAtRaw sql.NullString
-	err := s.db.QueryRow(
-		`SELECT id, session_id, prompt, worktree_path, state, commit_sha, commit_msg, error, created_at, updated_at, completed_at
+	run, err := scanRun(s.db.QueryRow(
+		`SELECT `+runColumns+`
 		   FROM runs
 		  WHERE id = ?`,
 		id,
-	).Scan(
-		&run.ID,
-		&run.SessionID,
-		&run.Prompt,
-		&run.WorktreePath,
-		&run.State,
-		&run.CommitSHA,
-		&run.CommitMsg,
-		&run.Error,
-		&createdAtRaw,
-		&updatedAtRaw,
-		&completedAtRaw,
-	)
+	))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Run{}, false, nil
 	}
 	if err != nil {
 		return Run{}, false, fmt.Errorf("get run %q: %w", id, err)
 	}
-
-	run.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAtRaw)
-	if err != nil {
-		return Run{}, false, fmt.Errorf("parse run created_at %q: %w", id, err)
-	}
-	run.UpdatedAt, err = time.Parse(time.RFC3339Nano, updatedAtRaw)
-	if err != nil {
-		return Run{}, false, fmt.Errorf("parse run updated_at %q: %w", id, err)
-	}
-	if completedAtRaw.Valid {
-		parsed, err := time.Parse(time.RFC3339Nano, completedAtRaw.String)
-		if err != nil {
-			return Run{}, false, fmt.Errorf("parse run completed_at %q: %w", id, err)
-		}
-		run.CompletedAt = &parsed
-	}
-
 	return run, true, nil
 }
 
@@ -443,7 +353,7 @@ func (s *Store) ListRuns(sessionID string) ([]Run, error) {
 	}
 
 	rows, err := s.db.Query(
-		`SELECT id, session_id, prompt, worktree_path, state, commit_sha, commit_msg, error, created_at, updated_at, completed_at
+		`SELECT `+runColumns+`
 		   FROM runs
 		  WHERE session_id = ?
 		  ORDER BY created_at DESC`,
@@ -456,39 +366,9 @@ func (s *Store) ListRuns(sessionID string) ([]Run, error) {
 
 	runs := make([]Run, 0)
 	for rows.Next() {
-		var run Run
-		var createdAtRaw string
-		var updatedAtRaw string
-		var completedAtRaw sql.NullString
-		if err := rows.Scan(
-			&run.ID,
-			&run.SessionID,
-			&run.Prompt,
-			&run.WorktreePath,
-			&run.State,
-			&run.CommitSHA,
-			&run.CommitMsg,
-			&run.Error,
-			&createdAtRaw,
-			&updatedAtRaw,
-			&completedAtRaw,
-		); err != nil {
+		run, err := scanRun(rows)
+		if err != nil {
 			return nil, fmt.Errorf("scan run: %w", err)
-		}
-		run.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAtRaw)
-		if err != nil {
-			return nil, fmt.Errorf("parse run created_at %q: %w", run.ID, err)
-		}
-		run.UpdatedAt, err = time.Parse(time.RFC3339Nano, updatedAtRaw)
-		if err != nil {
-			return nil, fmt.Errorf("parse run updated_at %q: %w", run.ID, err)
-		}
-		if completedAtRaw.Valid {
-			parsed, err := time.Parse(time.RFC3339Nano, completedAtRaw.String)
-			if err != nil {
-				return nil, fmt.Errorf("parse run completed_at %q: %w", run.ID, err)
-			}
-			run.CompletedAt = &parsed
 		}
 		runs = append(runs, run)
 	}
@@ -505,51 +385,19 @@ func (s *Store) GetLatestRun(sessionID string) (Run, bool, error) {
 		return Run{}, false, errors.New("session id cannot be empty")
 	}
 
-	var run Run
-	var createdAtRaw string
-	var updatedAtRaw string
-	var completedAtRaw sql.NullString
-	err := s.db.QueryRow(
-		`SELECT id, session_id, prompt, worktree_path, state, commit_sha, commit_msg, error, created_at, updated_at, completed_at
+	run, err := scanRun(s.db.QueryRow(
+		`SELECT `+runColumns+`
 		   FROM runs
 		  WHERE session_id = ?
 		  ORDER BY created_at DESC
 		  LIMIT 1`,
 		sessionID,
-	).Scan(
-		&run.ID,
-		&run.SessionID,
-		&run.Prompt,
-		&run.WorktreePath,
-		&run.State,
-		&run.CommitSHA,
-		&run.CommitMsg,
-		&run.Error,
-		&createdAtRaw,
-		&updatedAtRaw,
-		&completedAtRaw,
-	)
+	))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Run{}, false, nil
 	}
 	if err != nil {
 		return Run{}, false, fmt.Errorf("get latest run for session %q: %w", sessionID, err)
-	}
-
-	run.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAtRaw)
-	if err != nil {
-		return Run{}, false, fmt.Errorf("parse run created_at %q: %w", run.ID, err)
-	}
-	run.UpdatedAt, err = time.Parse(time.RFC3339Nano, updatedAtRaw)
-	if err != nil {
-		return Run{}, false, fmt.Errorf("parse run updated_at %q: %w", run.ID, err)
-	}
-	if completedAtRaw.Valid {
-		parsed, err := time.Parse(time.RFC3339Nano, completedAtRaw.String)
-		if err != nil {
-			return Run{}, false, fmt.Errorf("parse run completed_at %q: %w", run.ID, err)
-		}
-		run.CompletedAt = &parsed
 	}
 	return run, true, nil
 }
@@ -725,7 +573,7 @@ func ensureRowsAffected(res sql.Result, objectName string) error {
 		return fmt.Errorf("rows affected for %s: %w", objectName, err)
 	}
 	if rows == 0 {
-		return fmt.Errorf("%s not found", objectName)
+		return fmt.Errorf("%w: %s", ErrNotFound, objectName)
 	}
 	return nil
 }

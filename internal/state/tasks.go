@@ -39,8 +39,19 @@ type Task struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// ErrTaskNotFound is returned when a task id does not resolve.
-var ErrTaskNotFound = errors.New("task not found")
+// ErrNotFound is the package's single not-found signal.
+//
+// Lookups that may legitimately miss return (T, bool, error) and do not use it.
+// Operations addressed at a specific id — mutations, and gets that treat a
+// missing row as an error — wrap it, so callers can errors.Is rather than
+// matching on message text. internal/api used to do the latter:
+//
+//	if strings.Contains(strings.ToLower(err.Error()), "not found") { ... }
+var ErrNotFound = errors.New("not found")
+
+// ErrTaskNotFound is returned when a task id does not resolve. It wraps
+// ErrNotFound, so errors.Is matches either.
+var ErrTaskNotFound = fmt.Errorf("%w: task", ErrNotFound)
 
 // positionGap is the spacing between adjacent cards when a column is built
 // from scratch. Cards inserted between two neighbours take the midpoint, so a

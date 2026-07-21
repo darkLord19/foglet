@@ -576,7 +576,7 @@ func (s *Server) cancelSessionRun(w http.ResponseWriter, sessionID string) {
 	run, err := s.runner.CancelSessionLatestRun(sessionID)
 	if err != nil {
 		status := http.StatusBadRequest
-		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+		if errors.Is(err, state.ErrNotFound) {
 			status = http.StatusNotFound
 		}
 		http.Error(w, err.Error(), status)
