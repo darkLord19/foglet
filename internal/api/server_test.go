@@ -64,7 +64,6 @@ func TestHandleSettingsPut(t *testing.T) {
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 
-
 	st, err := state.NewStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("new state store failed: %v", err)

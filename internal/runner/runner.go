@@ -18,6 +18,7 @@ import (
 type Runner struct {
 	state    *state.Store
 	runs     RunStore
+	repos    RepoReader
 	settings SettingsReader
 	tools    ToolFactory
 	baseCtx  context.Context
@@ -42,6 +43,7 @@ func New(st *state.Store) *Runner {
 	// itself non-nil, which would turn every nil-store guard into a panic.
 	if st != nil {
 		r.runs = st
+		r.repos = st
 		r.settings = st
 	}
 	return r

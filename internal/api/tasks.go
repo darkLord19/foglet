@@ -10,7 +10,6 @@ import (
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
 	"github.com/darkLord19/foglet/internal/task"
-	"github.com/darkLord19/foglet/internal/toolcfg"
 	"github.com/google/uuid"
 )
 
@@ -353,45 +352,26 @@ func (s *Server) startTaskWork(taskID string, kind task.WorkKind) (string, error
 		return "", errors.New("task has no repository set")
 	}
 
-	repo, found, err := s.stateStore.GetRepoByName(t.RepoName)
-	if err != nil {
-		return "", err
-	}
-	if !found {
-		return "", fmt.Errorf("unknown repo: %s", t.RepoName)
-	}
-
-	tool, err := toolcfg.ResolveTool(t.Tool, s.stateStore, "task")
-	if err != nil {
-		return "", err
-	}
-
 	prompt := t.Title
 	if body := strings.TrimSpace(t.Body); body != "" {
 		prompt = t.Title + "\n\n" + body
 	}
 
-	branch, err := s.runner.ResolveBranch(repo.BaseWorktreePath, "", prompt)
-	if err != nil {
-		return "", err
-	}
-
-	baseBranch := strings.TrimSpace(t.BaseBranch)
-	if baseBranch == "" {
-		baseBranch = strings.TrimSpace(repo.DefaultBranch)
-	}
-	if baseBranch == "" {
-		baseBranch = "main"
-	}
-
-	session, _, err := s.runner.StartSessionAsync(runner.StartSessionOptions{
-		RepoName:   repo.Name,
-		RepoPath:   repo.BaseWorktreePath,
-		Branch:     branch,
-		Tool:       tool,
-		Model:      strings.TrimSpace(t.Model),
+	// Launch owns repo, tool, branch and base-branch resolution, so the board and
+	// the sessions API can no longer drift apart on those rules.
+	//
+	// The board still cannot request AutoPR, SetupCmd, Validate, ValidateCmd,
+	// CommitMsg or PRTitle — not because this path drops them any more, but
+	// because state.Task has no columns to carry them. Launch accepts all six;
+	// exposing them on a card needs a schema change.
+	session, _, err := s.runner.Launch(runner.LaunchRequest{
+		Entrypoint: "task",
+		RepoName:   t.RepoName,
 		Prompt:     prompt,
-		BaseBranch: baseBranch,
+		Tool:       t.Tool,
+		Model:      t.Model,
+		BaseBranch: t.BaseBranch,
+		Async:      true,
 	})
 	if err != nil {
 		return "", err

@@ -210,12 +210,25 @@ func (f *fakeRunStore) busyCleared() bool {
 	return false
 }
 
-// fakeSettings is an in-memory SettingsReader.
+// fakeSettings is an in-memory SettingsReader. The default tool is stored under
+// the "default_tool" key.
 type fakeSettings map[string]string
 
 func (f fakeSettings) GetSetting(key string) (string, bool, error) {
 	v, ok := f[key]
 	return v, ok, nil
+}
+
+func (f fakeSettings) GetDefaultTool() (string, bool, error) {
+	return f.GetSetting("default_tool")
+}
+
+// fakeRepos is an in-memory RepoReader.
+type fakeRepos map[string]state.Repo
+
+func (f fakeRepos) GetRepoByName(name string) (state.Repo, bool, error) {
+	repo, ok := f[name]
+	return repo, ok, nil
 }
 
 // fakeTool is an ai.Tool that never spawns a process.

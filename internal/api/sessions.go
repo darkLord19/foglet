@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -12,7 +13,6 @@ import (
 	"github.com/darkLord19/foglet/internal/editor"
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
-	"github.com/darkLord19/foglet/internal/toolcfg"
 )
 
 // dangerousShellChars contains characters that enable shell injection when
@@ -212,28 +212,6 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repo, found, err := s.stateStore.GetRepoByName(req.Repo)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if !found {
-		http.Error(w, fmt.Sprintf("unknown repo: %s", req.Repo), http.StatusBadRequest)
-		return
-	}
-
-	tool, err := toolcfg.ResolveTool(req.Tool, s.stateStore, "api")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	branch, err := s.runner.ResolveBranch(repo.BaseWorktreePath, req.BranchName, req.Prompt)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	autoPR := false
 	if req.AutoPR != nil {
 		autoPR = *req.AutoPR
@@ -243,36 +221,28 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 		async = *req.Async
 	}
 
-	baseBranch := strings.TrimSpace(req.BaseBranch)
-	if baseBranch == "" {
-		baseBranch = strings.TrimSpace(repo.DefaultBranch)
-	}
-	if baseBranch == "" {
-		baseBranch = "main"
-	}
-
-	opts := runner.StartSessionOptions{
-		RepoName:    repo.Name,
-		RepoPath:    repo.BaseWorktreePath,
-		Branch:      branch,
-		Tool:        tool,
-		Model:       strings.TrimSpace(req.Model),
+	session, run, err := s.runner.Launch(runner.LaunchRequest{
+		Entrypoint:  "api",
+		RepoName:    req.Repo,
 		Prompt:      req.Prompt,
+		Tool:        req.Tool,
+		Model:       req.Model,
+		BranchName:  req.BranchName,
+		BaseBranch:  req.BaseBranch,
 		AutoPR:      autoPR,
-		SetupCmd:    strings.TrimSpace(req.SetupCmd),
+		SetupCmd:    req.SetupCmd,
 		Validate:    req.Validate,
-		ValidateCmd: strings.TrimSpace(req.ValidateCmd),
-		BaseBranch:  baseBranch,
-		CommitMsg:   strings.TrimSpace(req.CommitMsg),
-		PRTitle:     strings.TrimSpace(req.PRTitle),
+		ValidateCmd: req.ValidateCmd,
+		CommitMsg:   req.CommitMsg,
+		PRTitle:     req.PRTitle,
+		Async:       async,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), launchErrorStatus(err))
+		return
 	}
 
 	if async {
-		session, run, err := s.runner.StartSessionAsync(opts)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
 		s.writeJSON(w, http.StatusAccepted, asyncCreateSessionResponse{
 			SessionID: session.ID,
 			RunID:     run.ID,
@@ -280,16 +250,19 @@ func (s *Server) createSession(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-
-	session, run, err := s.runner.StartSession(opts)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 	s.writeJSON(w, http.StatusOK, createSessionResponse{
 		Session: session,
 		Run:     run,
 	})
+}
+
+// launchErrorStatus maps a launch failure to an HTTP status. Rejected intent is
+// the caller's fault; anything else is ours.
+func launchErrorStatus(err error) int {
+	if errors.Is(err, runner.ErrInvalidLaunch) || errors.Is(err, runner.ErrUnknownRepo) {
+		return http.StatusBadRequest
+	}
+	return http.StatusInternalServerError
 }
 
 func (s *Server) getSession(w http.ResponseWriter, sessionID string) {
@@ -704,5 +677,3 @@ func preferredEditorForTool(toolName string) string {
 		return ""
 	}
 }
-
-

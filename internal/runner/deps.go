@@ -35,8 +35,18 @@ type RunStore interface {
 }
 
 // SettingsReader reads user preferences that alter how a run behaves.
+//
+// GetDefaultTool belongs here rather than as a raw GetSetting key because
+// toolcfg.ResolveTool consumes it as its own interface, and the default tool has
+// resolution rules of its own.
 type SettingsReader interface {
 	GetSetting(key string) (value string, found bool, err error)
+	GetDefaultTool() (tool string, found bool, err error)
+}
+
+// RepoReader resolves a managed repo by name.
+type RepoReader interface {
+	GetRepoByName(name string) (state.Repo, bool, error)
 }
 
 // ToolFactory resolves a canonical tool name to an AI tool adapter.
@@ -50,5 +60,6 @@ type ToolFactory func(name string) (ai.Tool, error)
 var (
 	_ RunStore       = (*state.Store)(nil)
 	_ SettingsReader = (*state.Store)(nil)
+	_ RepoReader     = (*state.Store)(nil)
 	_ ToolFactory    = ai.GetTool
 )

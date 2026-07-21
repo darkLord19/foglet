@@ -12,7 +12,7 @@ import (
 
 // App is the fully-wired application graph.
 type App struct {
-	Handler http.Handler   // fully-wired middleware stack (auth + CORS + body limit + routes)
+	Handler http.Handler // fully-wired middleware stack (auth + CORS + body limit + routes)
 	Runner  *runner.Runner
 	Store   *state.Store
 	mux     *http.ServeMux // for Mount()

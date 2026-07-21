@@ -212,22 +212,22 @@ func TestValidate(t *testing.T) {
 	}
 
 	invalid := map[string]string{
-		"":                          "empty",
-		"   ":                       "whitespace only",
+		"":                            "empty",
+		"   ":                         "whitespace only",
 		strings.Repeat("a", MaxLen+1): "too long",
-		"/leading":                  "leading slash",
-		"trailing/":                 "trailing slash",
-		"a..b":                      "double dot",
-		"a//b":                      "double slash",
-		"a@{b":                      "reflog syntax",
-		"a b":                       "space",
-		"a~b":                       "tilde",
-		"a^b":                       "caret",
-		"a:b":                       "colon",
-		"a?b":                       "question mark",
-		"a*b":                       "asterisk",
-		"a[b":                       "bracket",
-		"a\\b":                      "backslash",
+		"/leading":                    "leading slash",
+		"trailing/":                   "trailing slash",
+		"a..b":                        "double dot",
+		"a//b":                        "double slash",
+		"a@{b":                        "reflog syntax",
+		"a b":                         "space",
+		"a~b":                         "tilde",
+		"a^b":                         "caret",
+		"a:b":                         "colon",
+		"a?b":                         "question mark",
+		"a*b":                         "asterisk",
+		"a[b":                         "bracket",
+		"a\\b":                        "backslash",
 	}
 	for value, reason := range invalid {
 		if _, err := Validate(value); err == nil {

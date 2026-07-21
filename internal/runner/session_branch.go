@@ -78,4 +78,3 @@ func (r *Runner) SessionDiff(sessionID string) (diffStat, diffPatch string, err 
 
 	return strings.TrimSpace(stat), strings.TrimSpace(patch), nil
 }
-
