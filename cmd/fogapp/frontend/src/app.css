@@ -1,52 +1,48 @@
-/* ── Tailwind v4 ── */
+/* Hallmark · genre: modern-minimal · direction: Quiet · design-system: design.md · designed-as-app
+ * shell: persistent sidebar + main pane · enrichment: none
+ * pre-emit critique: P5 H5 E5 S5 R5 V4
+ *
+ * Entry stylesheet, kept thin: tokens live in tokens.css, shared component
+ * rules in primitives.css. Only imports, the Tailwind theme mapping, the reset
+ * and global chrome belong here.
+ */
+
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./tokens.css";
+@import "./primitives.css";
 
-/* ── Design tokens ── */
+/* Map the tokens into Tailwind's namespaces so utilities resolve against the
+   same values the hand-written CSS uses. One source of truth. */
 @theme inline {
-  --font-sans: "Inter", "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono);
 
-  /* Premium Deep Dark Palette */
-  --color-bg: #000000;
-  --color-bg-sidebar: #050505;
-  --color-bg-elevated: #121212;
-  /* Glass base */
-  --color-bg-hover: #1a1a1a;
-  --color-bg-active: #262626;
-  --color-bg-input: #0a0a0a;
+  --color-paper: var(--color-paper);
+  --color-paper-2: var(--color-paper-2);
+  --color-paper-3: var(--color-paper-3);
+  --color-paper-4: var(--color-paper-4);
+  --color-rule: var(--color-rule);
+  --color-rule-2: var(--color-rule-2);
+  --color-field: var(--color-field);
+  --color-ink: var(--color-ink);
+  --color-ink-2: var(--color-ink-2);
+  --color-ink-3: var(--color-ink-3);
+  --color-accent: var(--color-accent);
+  --color-accent-dim: var(--color-accent-dim);
+  --color-accent-ink: var(--color-accent-ink);
+  --color-signal-add: var(--color-signal-add);
+  --color-signal-del: var(--color-signal-del);
+  --color-signal-warn: var(--color-signal-warn);
+  --color-signal-info: var(--color-signal-info);
 
-  --color-border: #222;
-  --color-border-strong: #333;
-  --color-border-accent: #facc15;
-
-  --color-text: #f8fafc;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted: #64748b;
-
-  /* Vibrant Accents - Yellow */
-  --color-accent: #facc15;
-  /* Yellow-400 */
-  --color-accent-hover: #eab308;
-  /* Yellow-500 */
-  --color-accent-gradient: linear-gradient(135deg, #facc15 0%, #eab308 100%);
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-full: 9999px;
-
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
-  --shadow-md: 0 8px 30px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.6);
-  --shadow-glow: 0 0 20px rgba(250, 204, 21, 0.2);
+  --ease-out: var(--ease-out);
+  --ease-in: var(--ease-in);
+  --ease-in-out: var(--ease-in-out);
 }
 
-/* ── Global reset ── */
+/* ══ Reset ════════════════════════════════════════════════════════════ */
+
 *,
 *::before,
 *::after {
@@ -55,250 +51,157 @@
   padding: 0;
 }
 
+/* clip, never hidden — hidden creates a scroll container and breaks
+   position: sticky on descendants. */
 html,
 body {
-  height: 100%;
-  overflow: hidden;
-  background-color: #020408;
-  /* Fallback */
-  background: var(--color-bg);
-  color: #f8fafc;
-  /* Fallback */
-  color: var(--color-text);
+  block-size: 100%;
+  overflow-x: clip;
+  background: var(--color-paper);
+  color: var(--color-ink);
 }
 
 body {
-  font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-body);
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-y: hidden; /* the shell owns scrolling, not the document */
 }
 
 #app {
-  height: 100%;
+  block-size: 100%;
 }
 
-/* ── Global Styles & Utilities ── */
+/* ══ Base type ════════════════════════════════════════════════════════
+   Quiet has no display face: headings are the UI face at a heavier weight.
+   Roman at every level — italic headings are banned. */
 
-.solid-card {
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-body);
+  font-style: normal;
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+  min-inline-size: 0;
 }
 
-.card {
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  /* Removed transition */
+h1 { font-size: var(--text-lg); }
+h2 { font-size: var(--text-md); }
+h3 { font-size: var(--text-sm); }
+h4 { font-size: var(--text-sm); }
+
+code,
+pre,
+samp {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
 }
 
-.card:hover {
-  border-color: var(--color-border-strong);
-  /* Removed transform */
-  box-shadow: var(--shadow-lg);
-}
-
-/* Modern Form Elements */
-.field-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.label-v2 {
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.label-v2 :global(svg) {
+a {
   color: var(--color-accent);
+  text-decoration: none;
+  text-underline-offset: 0.2em;
 }
 
-.input-hint {
-  font-size: 12px;
-  color: var(--color-text-muted);
-  font-weight: 400;
+a:hover {
+  text-decoration: underline;
 }
 
-.input,
-.select,
-.textarea {
-  width: 100%;
-  padding: 12px 16px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-input);
-  color: var(--color-text);
-  font-size: 14px;
-  font-family: inherit;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
-  outline: none;
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
 }
 
-.input:focus,
-.select:focus,
-.textarea:focus {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px #1e293b, inset 0 2px 4px rgba(0, 0, 0, 0.3);
+/* Global focus floor: anything focusable without a primitive class still
+   gets a visible, instant ring. */
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 1px;
 }
 
-.select-wrapper {
-  position: relative;
+/* ══ Layout helpers ═══════════════════════════════════════════════════ */
+
+.shell-width {
+  inline-size: 100%;
+  max-inline-size: var(--shell-max);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+  min-inline-size: 0;
 }
 
-.select {
-  appearance: none;
-  cursor: pointer;
+.prose-width {
+  max-inline-size: var(--measure);
 }
 
-.select-arrows {
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  font-size: 10px;
-  color: var(--color-text-muted);
+.scroll-y {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  min-block-size: 0;
 }
 
-/* Buttons */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 0 24px;
-  height: 44px;
-  font-size: 14px;
-  font-weight: 700;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  user-select: none;
-  border: 1px solid transparent;
+.scroll-x {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  min-inline-size: 0;
 }
 
-.btn-primary {
-  background: var(--color-accent-gradient);
-  color: white;
-  box-shadow: 0 4px 15px #1a1500;
-}
+/* ══ Scrollbars ═══════════════════════════════════════════════════════
+   Thin and low-contrast: chrome that only appears when there's something
+   to scroll. */
 
-.btn-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px #1a1500;
-  filter: brightness(1.1);
-}
-
-.btn-primary:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.btn-secondary {
-  background: var(--color-bg-active);
-  color: var(--color-text);
-  border: 1px solid var(--color-border-strong);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--color-bg-hover);
-  border-color: var(--color-text-secondary);
-}
-
-.btn-ghost {
-  background: #09090b;
-  color: var(--color-text-secondary);
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: var(--color-bg-hover);
-  color: var(--color-text);
-}
-
-.btn:disabled {
-  filter: brightness(0.4) grayscale(1);
-  cursor: not-allowed;
-}
-
-/* ── Custom Toggle (Switch) ── */
-.toggle-switch {
-  position: relative;
-  width: 44px;
-  height: 24px;
-  background: var(--color-bg-active);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background 0.3s;
-  border: 1px solid var(--color-border);
-}
-
-.toggle-switch.checked {
-  background: var(--color-accent);
-  border-color: transparent;
-}
-
-.toggle-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 18px;
-  height: 18px;
-  background: white;
-  border-radius: 50%;
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.toggle-switch.checked .toggle-thumb {
-  transform: translateX(20px);
-}
-
-/* ── Animations ── */
-/* ── Animations (Removed for Solid Theme) ── */
-.animate-fade-in {
-  /* No-op */
-}
-
-.animate-slide-up {
-  /* No-op */
-}
-
-.animate-scale-in {
-  /* No-op */
-}
-
-.text-shimmer {
-  background: linear-gradient(90deg, #fff 0%, var(--color-text-secondary) 50%, #fff 100%);
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: shimmer 4s linear infinite;
-}
-
-/* ── Better Scrollbar ── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  inline-size: 10px;
+  block-size: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #000000;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #333;
-  border-radius: 10px;
+  background: var(--color-rule-2);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 100px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #444;
+  background: var(--color-field);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ══ Reduced motion ═══════════════════════════════════════════════════
+   Spatial motion collapses; functional indicators (spinners, the running
+   pulse) keep running because they carry state the user needs. */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 150ms !important;
+    transition-duration: 150ms !important;
+  }
+
+  .spinner,
+  .badge--running .badge__dot,
+  .btn[data-state="loading"]::after {
+    animation-duration: 1.4s !important;
+    animation-iteration-count: infinite !important;
+  }
 }

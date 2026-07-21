@@ -1,0 +1,138 @@
+/* Hallmark · genre: modern-minimal · direction: Quiet · design-system: design.md · designed-as-app
+ * paper oklch(16.8% 0.004 264) · accent oklch(86.1% 0.173 92) · Geist + JetBrains Mono
+ *
+ * Canonical token set for Fog Desktop. Nothing in this app inlines a raw
+ * colour, font, spacing, duration or radius value — everything references a
+ * token here. Amend design.md first, then this file.
+ *
+ * Palette derived from the "Quiet" direction mock, converted hex -> OKLCH, with
+ * two tokens raised to clear WCAG (see --color-ink-3 and --color-field).
+ */
+
+:root {
+  /* ── Surface ladder ────────────────────────────────────────────────
+     Cool-neutral near-black. Elevation rises by lightness in small steps;
+     the whole ladder spans 17%->23%, which is what keeps the chrome quiet. */
+  --color-paper: oklch(16.8% 0.004 264);
+  --color-paper-2: oklch(19.1% 0.006 271);
+  --color-paper-3: oklch(21.8% 0.008 275);
+  --color-paper-4: oklch(23.2% 0.010 277);
+
+  /* ── Lines ─────────────────────────────────────────────────────────
+     Three weights, three different obligations:
+       --color-rule    decorative separators (row + section dividers).
+                       Not a WCAG target: a row is identified by its text.
+       --color-rule-2  quiet edges on controls that carry a visible text
+                       label (buttons, cards, panels). The label does the
+                       identifying, so this stays at the mock's value.
+       --color-field   boundary of a text input. Held at >=3:1 against
+                       paper-4 per WCAG 1.4.11 — you must be able to see
+                       where the click target starts. */
+  --color-rule: oklch(26.4% 0.008 264);
+  --color-rule-2: oklch(31% 0.011 271);
+  --color-field: oklch(52% 0.012 273);
+
+  /* ── Text ──────────────────────────────────────────────────────────
+     --color-ink-3 is raised from the mock's #6C6E76 (3.77:1, below floor)
+     to clear 4.5:1 on paper-4. It carries timestamps, section labels and
+     inactive tabs — all of which are information, not decoration. */
+  --color-ink: oklch(93.7% 0.003 265);
+  --color-ink-2: oklch(71% 0.010 273);
+  --color-ink-3: oklch(62% 0.013 275);
+
+  /* ── Accent ────────────────────────────────────────────────────────
+     Fog yellow, unchanged. Quiet spends it about twice per screen: the
+     active sidebar rail and the one primary action. */
+  --color-accent: oklch(86.1% 0.173 92);
+  --color-accent-dim: oklch(79.5% 0.162 86);
+  --color-accent-ink: oklch(19.7% 0.022 104);
+  --color-accent-wash: oklch(86.1% 0.173 92 / 0.09);
+  --color-accent-line: oklch(86.1% 0.173 92 / 0.28);
+  --color-focus: oklch(86.1% 0.173 92);
+
+  /* ── Semantic signals — functional, not decorative ─────────────────
+     Diff gutters, log levels and run status only. Never a button fill,
+     never a gradient, always paired with a glyph or text label. */
+  --color-signal-add: oklch(80% 0.182 152);
+  --color-signal-del: oklch(71.1% 0.166 22);
+  --color-signal-warn: oklch(83.7% 0.164 84);
+  --color-signal-info: oklch(82.8% 0.101 230);
+
+  --color-signal-add-wash: oklch(80% 0.182 152 / 0.10);
+  --color-signal-del-wash: oklch(71.1% 0.166 22 / 0.10);
+  --color-signal-warn-wash: oklch(83.7% 0.164 84 / 0.10);
+
+  /* ── Type ──────────────────────────────────────────────────────────
+     Two families. Quiet doesn't want a display face — the UI face carries
+     headings at a heavier weight, which is what keeps it recessive.
+     Self-hosted via @fontsource: the app ships offline. */
+  --font-body: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  /* Fixed, not fluid. This is a dense tool at a fixed viewing distance;
+     type that grows with the window reads as a website, not an app.
+     Spacing stays fluid (see --gutter) so the layout still breathes. */
+  --text-2xs: 0.6875rem; /* 11px  — meta, counts */
+  --text-xs: 0.75rem;    /* 12px  — labels, buttons */
+  --text-sm: 0.8125rem;  /* 13px  — UI base */
+  --text-base: 0.8125rem;/* 13px  — body */
+  --text-md: 0.9375rem;  /* 15px  — surface titles */
+  --text-lg: 1.125rem;   /* 18px  — view headings */
+  --text-xl: 1.375rem;   /* 22px  — the largest thing in the app */
+
+  --leading-tight: 1.3;
+  --leading-body: 1.55;
+  --leading-caps: 1.1;
+
+  --tracking-label: 0.09em;
+  --tracking-tight: -0.012em;
+
+  --measure: 68ch;
+
+  /* ── Space — 4pt scale, named by role ──────────────────────────── */
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2.5rem;
+  --space-2xl: 4rem;
+
+  /* The one fluid space token — surface gutters grow with the window. */
+  --gutter: clamp(0.875rem, 0.5rem + 1vw, 1.5rem);
+
+  /* ── Structure ─────────────────────────────────────────────────── */
+  --radius: 6px;
+  --radius-sm: 4px;
+  --radius-lg: 8px;
+
+  --rule-hair: 1px;
+  --rule-active: 2px;
+
+  --row-h: 2.125rem;  /* 34px — sidebar + list rows */
+  --ctl-h: 1.75rem;   /* 28px — buttons, inputs */
+
+  /* ── Layout ────────────────────────────────────────────────────── */
+  --side-w: 15.5rem;   /* 248px */
+  --bar-h: 2.75rem;    /* 44px */
+  --shell-max: 1600px;
+
+  /* ── Motion ────────────────────────────────────────────────────── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --dur-micro: 130ms;
+  --dur-short: 200ms;
+  --dur-long: 320ms;
+
+  /* ── Z-scale — six named levels, no ad-hoc numbers ─────────────── */
+  --z-base: 1;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+}

@@ -161,3 +161,101 @@ export const ACTIVE_STATES: Record<string, boolean> = {
     COMMITTED: true,
     PR_CREATED: true,
 };
+
+// ── Tasks (board) ──
+
+export type TaskStatus = "todo" | "in_progress" | "in_review" | "done";
+export type TaskProvider = "local" | "linear" | "jira";
+
+export interface Task {
+    id: string;
+    title: string;
+    body?: string;
+    status: TaskStatus;
+    position: number;
+    repo_name?: string;
+    tool?: string;
+    model?: string;
+    base_branch?: string;
+    session_id?: string;
+    provider: TaskProvider;
+    external_id?: string;
+    external_key?: string;
+    external_url?: string;
+    external_status?: string;
+    synced_at?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface TaskResponse {
+    task: Task;
+    started: boolean;
+    /** Which agent was launched: "implement" or "review". */
+    kind?: "implement" | "review";
+    session_id?: string;
+}
+
+export interface CreateTaskPayload {
+    title: string;
+    body?: string;
+    status?: TaskStatus;
+    repo?: string;
+    tool?: string;
+    model?: string;
+    base_branch?: string;
+}
+
+export interface UpdateTaskPayload {
+    title?: string;
+    body?: string;
+    repo?: string;
+    tool?: string;
+    model?: string;
+    base_branch?: string;
+}
+
+export const TASK_COLUMNS: { id: TaskStatus; label: string }[] = [
+    { id: "todo", label: "Todo" },
+    { id: "in_progress", label: "In progress" },
+    { id: "in_review", label: "In review" },
+    { id: "done", label: "Done" },
+];
+
+// ── Tracker sync ──
+
+export interface TrackerStatusMap {
+    todo: string[];
+    in_progress: string[];
+    in_review: string[];
+    done: string[];
+}
+
+export interface TrackerConfig {
+    provider: TaskProvider;
+    has_token: boolean;
+    status_map: TrackerStatusMap;
+    linear_team?: string;
+    jira_url?: string;
+    jira_email?: string;
+    jira_jql?: string;
+}
+
+export interface UpdateTrackerPayload {
+    provider: TaskProvider;
+    /** Blank leaves the stored token untouched. */
+    token?: string;
+    status_map?: TrackerStatusMap;
+    linear_team?: string;
+    jira_url?: string;
+    jira_email?: string;
+    jira_jql?: string;
+}
+
+export interface SyncResult {
+    Imported: number;
+    Updated: number;
+    Pushed: number;
+    Skipped: number;
+    Unmapped: string[] | null;
+}

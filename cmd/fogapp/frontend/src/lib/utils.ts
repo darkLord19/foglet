@@ -31,6 +31,31 @@ export function relativeTime(value?: string): string {
     return `${days}d ago`;
 }
 
+/**
+ * Open a URL in the user's real browser.
+ *
+ * Prefers the bound Go method (`OpenExternal`), which is what `main_desktop.go`
+ * exposes for this. Falls back to the Wails runtime global, and finally to a
+ * plain `window.open` so the app still works when served outside the desktop
+ * shell (the e2e harness does exactly that).
+ */
+export function openExternal(url?: string): void {
+    if (!url) return;
+
+    const bound = window.go?.main?.desktopApp?.OpenExternal;
+    if (bound) {
+        void bound(url);
+        return;
+    }
+
+    if (window.runtime?.BrowserOpenURL) {
+        window.runtime.BrowserOpenURL(url);
+        return;
+    }
+
+    window.open(url, "_blank", "noopener,noreferrer");
+}
+
 // Aliases used by components
 export const formatRelativeTime = relativeTime;
 export const truncatePrompt = firstPromptLine;

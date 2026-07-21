@@ -1,64 +1,56 @@
 <script lang="ts">
-    import { appState } from "$lib/stores.svelte";
     import ChatBox from "./ChatBox.svelte";
-    import TaskList from "./TaskList.svelte";
-    import SessionHistory from "./SessionHistory.svelte";
-    import { fade } from "svelte/transition";
 
     function onSessionCreated() {
-        // maybe show a toast or auto-nav (handled in ChatBox)
+        // Navigation is handled in ChatBox.
     }
 </script>
 
-<div class="home-view" in:fade={{ duration: 300 }}>
-    <div class="content-wrapper centered">
-        <!-- Hero / Chat Section -->
-        <div class="hero-section">
-            <ChatBox {onSessionCreated} />
-        </div>
+<!-- The session lists live in the sidebar now, so this surface is just the
+     composer: one input, one action. -->
+<div class="home scroll-y">
+    <div class="home__bar">
+        <h1 class="home__title">New session</h1>
+    </div>
 
-        <!-- Active Tasks -->
-        <TaskList />
-
-        <!-- History -->
-        <SessionHistory />
+    <div class="home__inner">
+        <ChatBox {onSessionCreated} />
+        <p class="hint">
+            Starts a session immediately. To queue work instead, add it to the
+            board.
+        </p>
     </div>
 </div>
 
 <style>
-    .home-view {
-        width: 100%;
-        height: 100%;
-        overflow-y: auto;
-        padding-top: 80px; /* Space for TopNav + spacing */
-        padding-bottom: 40px;
-    }
-
-    .content-wrapper {
+    .home {
+        flex: 1;
+        min-block-size: 0;
         display: flex;
         flex-direction: column;
-        align-items: center;
-        padding: 0 24px;
-        max-width: 900px; /* Wider container for centering */
-        margin: 0 auto;
     }
 
-    .hero-section {
-        width: 100%;
+    .home__bar {
         display: flex;
-        justify-content: center;
-        margin-bottom: 20px;
+        align-items: center;
+        block-size: var(--bar-h);
+        flex: none;
+        padding-inline: var(--gutter);
+        border-block-end: var(--rule-hair) solid var(--color-rule);
     }
 
-    /* Custom scrollbar for webkit */
-    .home-view::-webkit-scrollbar {
-        width: 6px;
+    .home__title {
+        font-size: var(--text-md);
+        font-weight: 600;
+        letter-spacing: var(--tracking-tight);
     }
-    .home-view::-webkit-scrollbar-track {
-        background: transparent;
-    }
-    .home-view::-webkit-scrollbar-thumb {
-        background: var(--color-border);
-        border-radius: 99px;
+
+    .home__inner {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-sm);
+        inline-size: 100%;
+        max-inline-size: 46rem;
+        padding: var(--space-xl) var(--gutter);
     }
 </style>

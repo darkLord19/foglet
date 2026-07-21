@@ -14,6 +14,11 @@ declare global {
                 };
             };
         };
+        // Injected by the Wails shell; absent when the frontend is served
+        // standalone, so every use must be guarded.
+        runtime?: {
+            BrowserOpenURL: (url: string) => void;
+        };
     }
 }
 

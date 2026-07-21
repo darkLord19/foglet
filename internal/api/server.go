@@ -36,6 +36,10 @@ func New(runner *runner.Runner, stateStore *state.Store, port int) *Server {
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/sessions", s.handleSessions)
 	mux.HandleFunc("/api/sessions/", s.handleSessionDetail)
+	mux.HandleFunc("/api/tasks", s.handleTasks)
+	mux.HandleFunc("/api/tasks/", s.handleTaskDetail)
+	mux.HandleFunc("/api/tracker", s.handleTracker)
+	mux.HandleFunc("/api/tracker/sync", s.handleTrackerSync)
 	mux.HandleFunc("/api/repos", s.handleRepos)
 	mux.HandleFunc("/api/repos/branches", s.handleListBranches)
 	mux.HandleFunc("/api/repos/discover", s.handleDiscoverRepos)

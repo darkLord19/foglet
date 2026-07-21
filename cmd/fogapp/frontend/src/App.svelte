@@ -2,12 +2,12 @@
   import { onMount, onDestroy } from "svelte";
   import { Toaster } from "svelte-sonner";
   import { appState } from "$lib/stores.svelte";
-  import TopNav from "./components/TopNav.svelte";
+  import Sidebar from "./components/Sidebar.svelte";
+  import BoardView from "./components/BoardView.svelte";
   import HomeView from "./components/HomeView.svelte";
   import SessionDetail from "./components/SessionDetail.svelte";
   import SettingsView from "./components/Settings.svelte";
   import Onboarding from "./components/Onboarding.svelte";
-  import { fly, fade } from "svelte/transition";
 
   let initError = $state("");
 
@@ -24,115 +24,97 @@
   });
 </script>
 
+<!-- Toasts carry failures and off-screen events only; a successful action
+     changes the UI, which is its own feedback. -->
 <Toaster
   position="bottom-right"
-  richColors
   theme="dark"
   toastOptions={{
     style:
-      "background: var(--color-bg-elevated); border: 1px solid var(--color-border); color: var(--color-text); font-family: var(--font-sans); box-shadow: var(--shadow-md);",
+      "background: var(--color-paper-3); border: 1px solid var(--color-rule-2); border-radius: 6px; color: var(--color-ink); font-family: var(--font-body); font-size: var(--text-sm);",
   }}
 />
 
-<div class="app-shell">
-  <!-- Top Navigation (always visible) -->
-  <TopNav />
-
-  <!-- Main Content Area -->
-  <main class="main-content">
-    {#if initError}
-      <div class="center-stage" in:fly={{ y: 20, duration: 400 }}>
-        <div class="error-card card">
-          <div class="error-icon">⚠️</div>
-          <h2>Connection Failed</h2>
-          <p class="error-msg">{initError}</p>
-          <p class="hint">Ensure the Fog daemon is running on port 8080</p>
-          <button class="btn btn-secondary" onclick={() => location.reload()}>
-            Retry
-          </button>
-        </div>
-      </div>
-    {:else if appState.settings?.onboarding_required}
-      <Onboarding />
-    {:else if appState.currentView === "new"}
-      <HomeView />
-    {:else if appState.currentView === "detail"}
-      <div class="view-container" in:fly={{ y: 10, duration: 300, delay: 100 }}>
+{#if initError}
+  <div class="stage">
+    <div class="fault">
+      <p class="fault__label">Can&rsquo;t reach the daemon</p>
+      <p class="fault__msg mono">{initError}</p>
+      <p class="hint">Fog expects <code>fogd</code> on port 8080.</p>
+      <button class="btn btn-primary" onclick={() => location.reload()}>
+        Retry
+      </button>
+    </div>
+  </div>
+{:else if appState.settings?.onboarding_required}
+  <Onboarding />
+{:else}
+  <div class="shell">
+    <Sidebar />
+    <main class="shell__main">
+      {#if appState.currentView === "board"}
+        <BoardView />
+      {:else if appState.currentView === "new"}
+        <HomeView />
+      {:else if appState.currentView === "detail"}
         <SessionDetail />
-      </div>
-    {:else if appState.currentView === "settings"}
-      <div class="view-container">
+      {:else if appState.currentView === "settings"}
         <SettingsView />
-      </div>
-    {/if}
-  </main>
-</div>
+      {/if}
+    </main>
+  </div>
+{/if}
 
 <style>
-  .app-shell {
+  .shell {
     display: flex;
-    flex-direction: column;
-    height: 100vh;
+    block-size: 100dvh;
     overflow: hidden;
-    background: var(--color-bg);
+    background: var(--color-paper);
   }
 
-  .main-content {
+  .shell__main {
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-width: 0;
-    position: relative;
-    overflow: hidden; /* Fix scroll constraint */
+    min-inline-size: 0;
+    min-block-size: 0;
+    overflow: hidden;
   }
 
-  /* Adjust view-container to respect fixed header */
-  .view-container {
-    height: 100%;
-    width: 100%;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding-top: 56px; /* Match header height */
+  .stage {
+    display: grid;
+    place-items: center;
+    block-size: 100dvh;
+    padding: var(--gutter);
   }
 
-  .center-stage {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    width: 100%;
-    padding: 20px;
-  }
-
-  .error-card {
-    padding: 40px;
-    text-align: center;
-    max-width: 400px;
-    width: 100%;
+  .fault {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 16px;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    max-inline-size: 30rem;
+    padding: var(--space-lg);
+    background: var(--color-paper-2);
+    border: var(--rule-hair) solid var(--color-rule);
+    border-radius: var(--radius-lg);
   }
 
-  .error-icon {
-    font-size: 48px;
-    margin-bottom: 8px;
-  }
-
-  h2 {
-    font-size: 20px;
+  .fault__label {
+    font-size: var(--text-md);
     font-weight: 600;
-    color: var(--color-danger);
+    color: var(--color-ink);
   }
 
-  .error-msg {
-    font-size: 14px;
-    color: var(--color-text);
-  }
-
-  .hint {
-    font-size: 13px;
-    color: var(--color-text-muted);
+  .fault__msg {
+    inline-size: 100%;
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--color-paper);
+    border: var(--rule-hair) solid var(--color-rule);
+    border-radius: var(--radius);
+    font-size: var(--text-xs);
+    color: var(--color-ink-2);
+    overflow-wrap: anywhere;
   }
 </style>

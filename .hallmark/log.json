@@ -1,0 +1,15 @@
+[
+  {
+    "date": "2026-07-21",
+    "scope": "app",
+    "genre": "editorial",
+    "macrostructure": "Index-First / Workbench / Long Document",
+    "theme": "Brutal",
+    "theme_axes": "dark paper / display-heavy / warm accent",
+    "enrichment": "none",
+    "nav": "N7 brutal slab",
+    "design_system": "design.md",
+    "designed_as_app": true,
+    "brief": "Fog Desktop — Wails/Svelte agent-session app; brutalist redesign, fluid + ultrawide-aware, component decomposition"
+  }
+]

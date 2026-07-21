@@ -146,9 +146,42 @@ func (s *Store) init() error {
 			FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE
 		);`,
 
+		// Tasks sit above sessions: a task exists from the moment someone
+		// writes it down, and owns at most one session once work starts.
+		// The external_* columns mirror a tracker issue when the task is not
+		// Fog-owned; they stay empty for provider='local'.
+		`CREATE TABLE IF NOT EXISTS tasks (
+				id TEXT PRIMARY KEY,
+				title TEXT NOT NULL,
+				body TEXT,
+				status TEXT NOT NULL,
+				position REAL NOT NULL,
+				repo_name TEXT,
+				tool TEXT,
+				model TEXT,
+				base_branch TEXT,
+				session_id TEXT,
+				provider TEXT NOT NULL DEFAULT 'local',
+				external_id TEXT,
+				external_key TEXT,
+				external_url TEXT,
+				external_status TEXT,
+				synced_at TEXT,
+				created_at TEXT NOT NULL,
+				updated_at TEXT NOT NULL,
+				FOREIGN KEY(repo_name) REFERENCES repos(name),
+				FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE SET NULL
+			);`,
+
 		`CREATE INDEX IF NOT EXISTS idx_sessions_repo_updated ON sessions(repo_name, updated_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_runs_session_created ON runs(session_id, created_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_run_events_run_ts ON run_events(run_id, ts DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_tasks_status_position ON tasks(status, position);`,
+		// One row per remote issue. Partial index so the many local tasks,
+		// which have no external id, don't collide with each other on NULL.
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_provider_external
+			ON tasks(provider, external_id)
+			WHERE external_id IS NOT NULL;`,
 	}
 
 	for _, stmt := range stmts {

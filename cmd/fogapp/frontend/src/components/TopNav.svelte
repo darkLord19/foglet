@@ -1,6 +1,6 @@
 <script lang="ts">
   import { appState } from "$lib/stores.svelte";
-  import { Sparkles, Settings, Activity } from "@lucide/svelte";
+  import { Settings } from "@lucide/svelte";
 
   function showHome() {
     appState.setView("new");
@@ -13,111 +13,90 @@
   }
 </script>
 
-<nav class="top-nav glass">
-  <div class="nav-left">
-    <button class="brand-btn" onclick={showHome}>
-      <div class="logo-orb">
-        <Sparkles size={16} />
-      </div>
-      <span class="brand-name">Fog</span>
-    </button>
-  </div>
+<!-- N7 brutal slab: full-bleed bar, opaque, 2px structural rule below. -->
+<nav class="nav">
+  <button class="mark" onclick={showHome} aria-label="Fog — home">
+    <span class="mark__glyph" aria-hidden="true">▚</span>
+    <span class="mark__name">FOG</span>
+  </button>
 
-  <div class="nav-right">
-    <button
-      id="nav-settings"
-      class="nav-icon-btn {appState.currentView === 'settings' ? 'active' : ''}"
-      onclick={showSettings}
-      title="Settings"
-    >
-      <Settings size={18} />
-    </button>
-  </div>
+  <button
+    id="nav-settings"
+    class="btn btn-ghost btn-icon nav__action"
+    class:is-current={appState.currentView === "settings"}
+    onclick={showSettings}
+    aria-current={appState.currentView === "settings"}
+    title="Settings"
+    aria-label="Settings"
+  >
+    <Settings size={18} />
+  </button>
 </nav>
 
 <style>
-  .top-nav {
+  .nav {
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 56px;
-    z-index: 100;
+    inset-block-start: 0;
+    inset-inline: 0;
+    z-index: var(--z-sticky);
+    block-size: var(--bar-h);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 24px;
-    border-bottom: 1px solid var(--color-border);
-    /* Glass effect inherited from global .glass */
+    gap: var(--space-md);
+    padding-inline: var(--gutter);
+    /* Opaque. The previous build applied a `.glass` class that was never
+       defined anywhere, so content scrolled under a transparent bar. */
+    background: var(--color-paper);
+    border-block-end: var(--rule-hair) solid var(--color-rule);
   }
 
-  .nav-left {
+  .mark {
     display: flex;
     align-items: center;
-  }
-
-  .brand-btn {
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    gap: var(--space-xs);
+    padding: var(--space-2xs) var(--space-xs);
     background: none;
-    border: none;
+    border: var(--rule-hair) solid transparent;
     cursor: pointer;
-    padding: 4px;
-    border-radius: 8px;
-    transition: background 0.2s;
+    transition: border-color var(--dur-micro) var(--ease-out);
   }
 
-  .brand-btn:hover {
-    background: var(--color-bg-hover);
+  .mark:hover {
+    border-color: var(--color-rule);
   }
 
-  .logo-orb {
-    width: 28px;
-    height: 28px;
-    background: var(--color-accent-gradient);
-    color: white;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+  .mark:focus-visible {
+    outline: var(--rule-hair) solid var(--color-focus);
+    outline-offset: var(--rule-hair);
   }
 
-  .brand-name {
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    color: var(--color-text);
+  /* The wordmark is the accent's anchor point — a drawn glyph, not a
+     rounded orb with a leftover blue glow. */
+  .mark__glyph {
+    display: grid;
+    place-items: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    background: var(--color-accent);
+    color: var(--color-accent-ink);
+    font-size: var(--text-sm);
+    line-height: 1;
   }
 
-  .nav-right {
-    display: flex;
-    align-items: center;
-    gap: 16px;
+  .mark__name {
+    font-family: var(--font-body);
+    font-weight: 800;
+    font-size: var(--text-md);
+    letter-spacing: 0.02em;
+    line-height: var(--leading-caps);
+    color: var(--color-ink);
   }
 
-  .nav-icon-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .nav-icon-btn:hover {
-    background: var(--color-bg-hover);
-    color: var(--color-text);
-  }
-
-  .nav-icon-btn.active {
-    background: var(--color-bg-active);
+  /* Active chrome is a rule, not a fill — keeps the accent budget for the
+     one primary action per surface. */
+  .nav__action.is-current {
     color: var(--color-accent);
+    border-block-end: var(--rule-active) solid var(--color-accent);
   }
 </style>

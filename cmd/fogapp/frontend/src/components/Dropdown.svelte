@@ -3,7 +3,6 @@
     import { clickOutside } from "$lib/actions";
     import type { Snippet } from "svelte";
 
-    // Flexible option type
     type OptionValue = string | number;
     type OptionObj = { value: OptionValue; label: string };
     type Option = OptionValue | OptionObj;
@@ -11,7 +10,7 @@
     let {
         value = $bindable(),
         options = [],
-        placeholder = "Select...",
+        placeholder = "Select…",
         icon,
         disabled = false,
         class: className = "",
@@ -29,13 +28,18 @@
     } = $props();
 
     let open = $state(false);
+    let activeIndex = $state(-1);
+    let listEl = $state<HTMLDivElement | null>(null);
 
     function toggle() {
-        if (!disabled) open = !open;
+        if (disabled) return;
+        open = !open;
+        if (open) activeIndex = options.findIndex((o) => getValue(o) === value);
     }
 
     function close() {
         open = false;
+        activeIndex = -1;
     }
 
     function select(opt: Option) {
@@ -44,7 +48,6 @@
         close();
     }
 
-    // Helper to get label to display
     function getLabel(opt: Option): string {
         return typeof opt === "object" ? opt.label : String(opt);
     }
@@ -59,196 +62,258 @@
         if (!value) return placeholder;
         return String(value);
     });
+
+    // Full keyboard path: the previous build was pointer-only.
+    function onKeydown(e: KeyboardEvent) {
+        if (disabled) return;
+
+        if (!open) {
+            if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggle();
+            }
+            return;
+        }
+
+        switch (e.key) {
+            case "Escape":
+                e.preventDefault();
+                close();
+                break;
+            case "ArrowDown":
+                e.preventDefault();
+                activeIndex = Math.min(activeIndex + 1, options.length - 1);
+                scrollActiveIntoView();
+                break;
+            case "ArrowUp":
+                e.preventDefault();
+                activeIndex = Math.max(activeIndex - 1, 0);
+                scrollActiveIntoView();
+                break;
+            case "Home":
+                e.preventDefault();
+                activeIndex = 0;
+                scrollActiveIntoView();
+                break;
+            case "End":
+                e.preventDefault();
+                activeIndex = options.length - 1;
+                scrollActiveIntoView();
+                break;
+            case "Enter":
+            case " ":
+                e.preventDefault();
+                if (activeIndex >= 0) select(options[activeIndex]);
+                break;
+            case "Tab":
+                close();
+                break;
+        }
+    }
+
+    function scrollActiveIntoView() {
+        // preventScroll equivalent: move only the list, never the page.
+        queueMicrotask(() => {
+            const el = listEl?.children[activeIndex] as HTMLElement | undefined;
+            el?.scrollIntoView({ block: "nearest" });
+        });
+    }
 </script>
 
-<div class="dropdown-container {className}" use:clickOutside={close}>
+<div class="dd {className}" use:clickOutside={close}>
     <button
-        class="dropdown-trigger variant-{variant} {open ? 'open' : ''}"
-        onclick={toggle}
-        {disabled}
         type="button"
+        class="dd__trigger"
+        class:is-ghost={variant === "ghost"}
+        class:is-open={open}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        {disabled}
+        onclick={toggle}
+        onkeydown={onKeydown}
     >
         {#if icon}
-            {@render icon()}
+            <span class="dd__icon" aria-hidden="true">{@render icon()}</span>
         {/if}
 
-        <div class="selected-text-wrapper">
-            <span class="selected-text">{selectedLabel}</span>
-        </div>
+        <span class="dd__value truncate" class:is-placeholder={!value}>
+            {selectedLabel}
+        </span>
 
-        <ChevronDown size={14} class="chevron {open ? 'rotate' : ''}" />
+        <ChevronDown size={13} class={open ? "dd__chev is-open" : "dd__chev"} />
     </button>
 
     {#if open}
-        <div class="dropdown-menu-v2">
-            <div class="dropdown-scroll">
-                {#each options as opt}
+        <div class="dd__menu">
+            <div class="dd__list" role="listbox" bind:this={listEl}>
+                {#each options as opt, i (getValue(opt))}
                     {@const isSelected = getValue(opt) === value}
                     <button
-                        class="dropdown-item {isSelected ? 'selected' : ''}"
-                        onclick={() => select(opt)}
                         type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        class="dd__opt"
+                        class:is-selected={isSelected}
+                        class:is-active={i === activeIndex}
+                        onclick={() => select(opt)}
+                        onmouseenter={() => (activeIndex = i)}
                     >
                         {#if labelSnippet}
                             {@render labelSnippet(opt)}
                         {:else}
-                            <span class="item-label">{getLabel(opt)}</span>
+                            <span class="truncate">{getLabel(opt)}</span>
                         {/if}
 
                         {#if isSelected}
-                            <Check size={14} class="check-icon" />
+                            <Check size={13} />
                         {/if}
                     </button>
                 {/each}
+
+                {#if options.length === 0}
+                    <p class="dd__empty">Nothing to choose from</p>
+                {/if}
             </div>
         </div>
     {/if}
 </div>
 
 <style>
-    .dropdown-container {
+    .dd {
         position: relative;
         display: inline-block;
-        min-width: 140px;
+        min-inline-size: 8rem;
+        max-inline-size: 100%;
     }
 
-    .dropdown-trigger {
-        width: 100%;
+    .dd__trigger {
+        inline-size: 100%;
         display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 6px 10px;
-        background: var(--color-bg-input);
-        border: 1px solid var(--color-border);
-        border-radius: 8px;
-        color: var(--color-text);
-        font-family: inherit;
-        font-size: 13px;
+        gap: var(--space-xs);
+        padding: var(--space-2xs) var(--space-xs);
+        background: var(--color-paper);
+        border: var(--rule-hair) solid var(--color-rule-2);
+        border-radius: var(--radius);
+        color: var(--color-ink);
+        font-family: var(--font-body);
+        font-size: var(--text-sm);
+        text-align: start;
         cursor: pointer;
-        transition: all 0.2s;
-        text-align: left;
+        min-inline-size: 0;
+        transition:
+            border-color var(--dur-micro) var(--ease-out),
+            background-color var(--dur-micro) var(--ease-out);
     }
 
-    .dropdown-trigger:hover:not(:disabled) {
-        background: var(--color-bg-hover);
-        border-color: var(--color-border-strong);
+    .dd__trigger:hover:not(:disabled) {
+        background: var(--color-paper-3);
+        border-color: var(--color-rule-2);
     }
 
-    .dropdown-trigger.variant-ghost {
-        background: #09090b;
-        border-color: #09090b;
+    .dd__trigger:focus-visible {
+        outline: var(--rule-hair) solid var(--color-focus);
+        outline-offset: var(--rule-hair);
     }
 
-    .dropdown-trigger.variant-ghost:hover:not(:disabled) {
-        background: var(--color-bg-hover);
+    .dd__trigger.is-open {
+        border-color: var(--color-accent);
     }
 
-    .dropdown-trigger.open {
-        background: var(--color-bg-active);
-        border-color: var(--color-text-secondary);
+    .dd__trigger.is-ghost {
+        background: transparent;
+        border-color: transparent;
     }
 
-    .dropdown-trigger.variant-ghost.open {
-        background: #09090b;
-        border-color: #09090b;
-        color: var(--color-text); /* Keep text normal */
+    .dd__trigger.is-ghost:hover:not(:disabled) {
+        background: var(--color-paper-3);
     }
 
-    .dropdown-trigger:disabled {
-        filter: brightness(0.4);
+    .dd__trigger:disabled {
+        opacity: 0.45;
         cursor: not-allowed;
     }
 
-    .selected-text-wrapper {
+    .dd__icon {
+        display: flex;
+        flex: none;
+        color: var(--color-ink-3);
+    }
+
+    .dd__value {
         flex: 1;
-        overflow: hidden;
     }
 
-    .selected-text {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        display: block;
+    .dd__value.is-placeholder {
+        color: var(--color-ink-3);
     }
 
-    .chevron {
-        color: var(--color-text-muted);
-        transition: transform 0.2s;
-        flex-shrink: 0;
+    :global(.dd__chev) {
+        flex: none;
+        color: var(--color-ink-3);
+        transition: transform var(--dur-micro) var(--ease-out);
     }
 
-    .chevron.rotate {
+    :global(.dd__chev.is-open) {
         transform: rotate(180deg);
     }
 
-    /* Menu */
-    .dropdown-menu-v2 {
+    .dd__menu {
         position: absolute;
-        top: calc(100% + 4px);
-        left: 0;
-        min-width: 100%; /* Match trigger width */
-        width: max-content; /* Or allow it to be wider */
-        max-width: 300px;
-        z-index: 9999;
-        background-color: #09090b !important; /* Force opaque dark */
-        opacity: 1 !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-        border: 1px solid var(--color-border);
-        border-radius: 8px;
-        padding: 4px;
-        box-shadow: 0 10px 40px #000000;
-        overflow: hidden;
+        inset-block-start: calc(100% + var(--space-3xs));
+        inset-inline-start: 0;
+        min-inline-size: 100%;
+        inline-size: max-content;
+        max-inline-size: min(20rem, 60vw);
+        z-index: var(--z-dropdown);
+        background: var(--color-paper-2);
+        border: var(--rule-hair) solid var(--color-rule-2);
+        border-radius: var(--radius);
     }
 
-    .dropdown-scroll {
-        max-height: 240px;
+    .dd__list {
+        max-block-size: 15rem;
         overflow-y: auto;
-        /* Scrollbar styling using global keywords if available, else local */
+        overscroll-behavior: contain;
     }
 
-    .dropdown-scroll::-webkit-scrollbar {
-        width: 4px;
-    }
-
-    .dropdown-item {
+    .dd__opt {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        width: 100%;
-        padding: 8px 12px;
-        background: #09090b;
+        gap: var(--space-xs);
+        inline-size: 100%;
+        padding: var(--space-2xs) var(--space-sm);
+        background: transparent;
         border: none;
-        border-radius: 6px;
-        color: var(--color-text-secondary);
-        font-family: inherit;
-        font-size: 13px;
+        border-inline-start: var(--rule-active) solid transparent;
+        color: var(--color-ink-2);
+        font-family: var(--font-body);
+        font-size: var(--text-sm);
+        text-align: start;
         cursor: pointer;
-        transition: all 0.1s;
-        text-align: left;
-        gap: 8px;
+        min-inline-size: 0;
     }
 
-    .dropdown-item:hover {
-        background: var(--color-bg-hover);
-        color: var(--color-text);
+    .dd__opt + .dd__opt {
+        border-block-start: var(--rule-hair) solid var(--color-rule);
     }
 
-    .dropdown-item.selected {
-        background: #1e1b00;
+    /* Pointer hover and keyboard focus share one visual state, so the
+       highlight never desyncs between the two input paths. */
+    .dd__opt.is-active {
+        background: var(--color-paper-3);
+        color: var(--color-ink);
+    }
+
+    .dd__opt.is-selected {
+        border-inline-start-color: var(--color-accent);
         color: var(--color-accent);
-        border: 1px solid var(--color-accent);
-        font-weight: 500;
     }
 
-    .item-label {
-        flex: 1;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .check-icon {
-        color: var(--color-accent);
+    .dd__empty {
+        padding: var(--space-xs) var(--space-sm);
+        font-size: var(--text-xs);
+        color: var(--color-ink-3);
     }
 </style>

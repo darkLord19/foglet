@@ -1,314 +1,179 @@
 <script lang="ts">
     import { appState } from "$lib/stores.svelte";
-    import { fade } from "svelte/transition";
-    import {
-        FileDiff,
-        GitBranch,
-        ArrowRight,
-        Code2,
-        FileText,
-        Info,
-        CheckCircle2,
-    } from "@lucide/svelte";
+    import { ArrowRight } from "@lucide/svelte";
 
     const diff = $derived(appState.detailDiff);
     const diffError = $derived(appState.detailDiffError);
+
+    const lines = $derived(diff?.patch ? diff.patch.split("\n") : []);
+
+    function kindOf(line: string): "add" | "del" | "meta" | "ctx" {
+        if (line.startsWith("+++") || line.startsWith("---")) return "meta";
+        if (line.startsWith("@@") || line.startsWith("diff ")) return "meta";
+        if (line.startsWith("+")) return "add";
+        if (line.startsWith("-")) return "del";
+        return "ctx";
+    }
 </script>
 
-<div class="diff-module" in:fade>
+<div class="dv">
     {#if diffError}
-        <div class="empty-diff">
-            <div class="zen-orb mini">
-                <Info size={20} />
-            </div>
-            <p>Unable to load diff.</p>
-            <p class="error-detail">{diffError}</p>
+        <div class="empty">
+            <p class="empty__title">Couldn&rsquo;t load the diff</p>
+            <p class="dv__err mono">{diffError}</p>
         </div>
     {:else if !diff}
-        <div class="empty-diff">
-            <div class="zen-orb mini">
-                <Info size={20} />
-            </div>
-            <p>No changes detected in this run cycle.</p>
+        <div class="empty">
+            <p class="empty__title">No changes</p>
+            <p>This run didn&rsquo;t modify any files.</p>
         </div>
     {:else}
-        <div class="diff-display glass card">
-            <header class="diff-header">
-                <div class="diff-title">
-                    <div class="icon-ring">
-                        <FileDiff size={14} />
-                    </div>
-                    <span>Proposed Intelligence Changes</span>
-                </div>
-                <div class="branch-flow">
-                    <div class="branch-pill target">
-                        <GitBranch size={12} />
-                        <span>{diff.base_branch}</span>
-                    </div>
-                    <ArrowRight size={14} class="flow-arrow" />
-                    <div class="branch-pill source">
-                        <GitBranch size={12} />
-                        <span>{diff.branch}</span>
-                    </div>
-                </div>
-            </header>
+        <div class="panel dv__panel">
+            <div class="panel__head dv__head">
+                <span class="panel__title">Changes</span>
+                <p class="dv__branches mono">
+                    <span class="truncate">{diff.base_branch}</span>
+                    <ArrowRight size={12} />
+                    <span class="dv__branch-to truncate">{diff.branch}</span>
+                </p>
+            </div>
 
             {#if diff.stat}
-                <div class="diff-stat-pane">
-                    <div class="stat-inner">
-                        <div class="stat-icon"><FileText size={12} /></div>
-                        <span class="stat-text">{diff.stat}</span>
-                    </div>
-                    <div class="approval-tag">
-                        <CheckCircle2 size={12} />
-                        <span>Review Pending</span>
-                    </div>
-                </div>
+                <p class="dv__stat mono">{diff.stat}</p>
             {/if}
 
-            <div class="diff-content">
-                {#if diff.patch}
-                    <div class="patch-viewer">
-                        <div class="line-numbers-glow"></div>
-                        <pre class="patch-code">
-                            {#each diff.patch.split("\n") as line}
-                                <div
-                                    class="patch-line"
-                                    class:add={line.startsWith("+")}
-                                    class:sub={line.startsWith("-")}
-                                    class:meta={line.startsWith("@@")}>
-                                    <span class="line-content">{line}</span>
-                                </div>
-                            {/each}
-                        </pre>
-                    </div>
-                {:else}
-                    <div class="no-patch">
-                        <Code2 size={24} />
-                        <p>
-                            No binary or text difference available to display.
-                        </p>
-                    </div>
-                {/if}
-            </div>
+            {#if lines.length > 0}
+                <div class="dv__patch scroll-y">
+                    <pre class="dv__pre">{#each lines as line, i}<span
+                                class="dv__line dv__line--{kindOf(line)}"
+                                ><span class="dv__ln" aria-hidden="true"
+                                    >{i + 1}</span
+                                ><span class="dv__code">{line || " "}</span
+                                ></span
+                            >{/each}</pre>
+                </div>
+            {:else}
+                <div class="dv__body">
+                    <p class="hint">No text patch available for this change.</p>
+                </div>
+            {/if}
         </div>
     {/if}
 </div>
 
 <style>
-    .diff-module {
-        height: 100%;
+    .dv {
+        block-size: 100%;
+        min-block-size: 0;
+        display: flex;
+    }
+
+    .dv__panel {
         display: flex;
         flex-direction: column;
+        inline-size: 100%;
+        min-inline-size: 0;
+        min-block-size: 0;
     }
 
-    .empty-diff {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 60px 20px;
-        color: var(--color-text-muted);
-        text-align: center;
-        gap: 16px;
+    .dv__head {
+        flex-wrap: wrap;
     }
 
-    .error-detail {
-        max-width: 760px;
-        width: 100%;
-        font-family: var(--font-mono);
-        font-size: 12px;
-        color: var(--color-text-secondary);
-        opacity: 0.8;
-        text-align: left;
-        white-space: pre-wrap;
-        word-break: break-word;
-        background: rgba(255, 255, 255, 0.02);
-        border: 1px solid var(--color-border);
-        border-radius: 12px;
-        padding: 12px 14px;
-    }
-
-    .zen-orb.mini {
-        width: 44px;
-        height: 44px;
-        background: var(--color-bg-active);
-        border-radius: 50%;
+    .dv__branches {
         display: flex;
         align-items: center;
-        justify-content: center;
-        color: var(--color-text-muted);
-        border: 1px solid var(--color-border);
+        gap: var(--space-2xs);
+        font-size: var(--text-2xs);
+        color: var(--color-ink-3);
+        min-inline-size: 0;
     }
 
-    .diff-display {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        overflow: hidden;
-        border-radius: 20px;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-    }
-
-    .diff-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 16px 20px;
-        border-bottom: 1px solid var(--color-border);
-        background: rgba(255, 255, 255, 0.02);
-    }
-
-    .diff-title {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        font-size: 13px;
-        font-weight: 700;
-        letter-spacing: -0.01em;
-    }
-
-    .icon-ring {
-        width: 28px;
-        height: 28px;
-        border-radius: 8px;
-        background: var(--color-bg-active);
-        border: 1px solid var(--color-border);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+    .dv__branch-to {
         color: var(--color-accent);
     }
 
-    .branch-flow {
-        display: flex;
-        align-items: center;
-        gap: 8px;
+    .dv__stat {
+        flex: none;
+        padding: var(--space-2xs) var(--space-md);
+        border-block-end: var(--rule-hair) solid var(--color-rule);
+        font-size: var(--text-2xs);
+        color: var(--color-ink-2);
     }
 
-    .branch-pill {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-family: var(--font-mono);
-        font-size: 11px;
-        font-weight: 600;
-        border: 1px solid var(--color-border);
+    .dv__body {
+        padding: var(--space-md);
     }
 
-    .branch-pill.target {
-        background: rgba(59, 130, 246, 0.05);
-        color: var(--color-text-secondary);
-    }
-    .branch-pill.source {
-        background: rgba(59, 130, 246, 0.1);
-        color: var(--color-accent);
-        border-color: rgba(59, 130, 246, 0.3);
-    }
-
-    .diff-stat-pane {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 20px;
-        background: rgba(0, 0, 0, 0.2);
-        border-bottom: 1px solid var(--color-border);
-    }
-
-    .stat-inner {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-
-    .stat-icon {
-        color: var(--color-text-muted);
-    }
-    .stat-text {
-        font-size: 12px;
-        font-weight: 500;
-        color: var(--color-text-secondary);
-    }
-
-    .approval-tag {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 10px;
-        font-weight: 800;
-        text-transform: uppercase;
-        color: var(--color-text-muted);
-        opacity: 0.6;
-    }
-
-    .diff-content {
+    .dv__patch {
         flex: 1;
-        overflow: hidden;
-        background: #05070a;
-        position: relative;
+        min-block-size: 0;
+        background: var(--color-paper);
     }
 
-    .patch-viewer {
-        height: 100%;
-        overflow: auto;
-        padding: 20px 0;
-    }
-
-    .patch-code {
+    .dv__pre {
         margin: 0;
         font-family: var(--font-mono);
-        font-size: 13px;
+        font-size: var(--text-sm);
         line-height: 1.6;
+        min-inline-size: max-content;
     }
 
-    .patch-line {
-        padding: 0 24px;
-        white-space: pre;
-        transition: background 0.2s;
-    }
-
-    .patch-line:hover {
-        background: rgba(255, 255, 255, 0.03);
-    }
-
-    .patch-line.add {
-        background: rgba(52, 211, 153, 0.08);
-        color: #6ee7b7;
-        border-left: 3px solid #34d399;
-    }
-    .patch-line.sub {
-        background: rgba(248, 113, 113, 0.08);
-        color: #fca5a5;
-        border-left: 3px solid #f87171;
-    }
-    .patch-line.meta {
-        background: rgba(59, 130, 246, 0.05);
-        color: var(--color-text-muted);
-        font-weight: 700;
-        opacity: 0.8;
-    }
-
-    .no-patch {
-        height: 100%;
+    .dv__line {
         display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        color: var(--color-text-muted);
-        gap: 16px;
+        gap: var(--space-sm);
+        /* The gutter rule carries the add/del signal alongside the colour,
+           so the diff stays legible without colour perception. */
+        border-inline-start: var(--rule-active) solid transparent;
+        padding-inline-end: var(--space-md);
     }
 
-    @keyframes breath {
-        0%,
-        100% {
-            opacity: 0.8;
-            transform: scale(1);
-        }
-        50% {
-            opacity: 1;
-            transform: scale(1.05);
-        }
+    .dv__ln {
+        flex: none;
+        inline-size: 4ch;
+        padding-inline-start: var(--space-xs);
+        text-align: end;
+        color: var(--color-rule-2);
+        user-select: none;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .dv__code {
+        white-space: pre;
+        color: var(--color-ink-2);
+    }
+
+    .dv__line--add {
+        background: var(--color-signal-add-wash);
+        border-inline-start-color: var(--color-signal-add);
+    }
+
+    .dv__line--add .dv__code {
+        color: var(--color-signal-add);
+    }
+
+    .dv__line--del {
+        background: var(--color-signal-del-wash);
+        border-inline-start-color: var(--color-signal-del);
+    }
+
+    .dv__line--del .dv__code {
+        color: var(--color-signal-del);
+    }
+
+    .dv__line--meta .dv__code {
+        color: var(--color-ink-3);
+        font-weight: 600;
+    }
+
+    .dv__err {
+        font-size: var(--text-xs);
+        color: var(--color-ink-2);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        padding: var(--space-sm);
+        background: var(--color-paper-2);
+        border-inline-start: var(--rule-hair) solid
+            var(--color-signal-del);
     }
 </style>

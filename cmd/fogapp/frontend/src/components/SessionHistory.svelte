@@ -1,258 +1,96 @@
 <script lang="ts">
     import { appState } from "$lib/stores.svelte";
-    import { slide } from "svelte/transition";
-    import {
-        ChevronRight,
-        ChevronDown,
-        CheckCircle2,
-        Clock,
-        MoreHorizontal,
-        GitPullRequest,
-    } from "@lucide/svelte";
+    import { formatRelativeTime, openExternal } from "$lib/utils";
+    import { Check, GitPullRequest } from "@lucide/svelte";
+    import Collapsible from "./common/Collapsible.svelte";
 
-    let expanded = $state(true);
-
-    // Filter completed sessions
     let sessions = $derived(appState.completedSessions);
 
     function openSession(id: string) {
         appState.selectSession(id);
     }
 
-    function openPR(e: MouseEvent, url: string) {
+    function openPR(e: MouseEvent, url?: string) {
         e.stopPropagation();
-        if (url) {
-            window.runtime.BrowserOpenURL(url);
-        }
+        openExternal(url);
     }
 </script>
 
-<div class="session-history">
-    <button class="list-header" onclick={() => (expanded = !expanded)}>
-        <div class="header-left">
-            <div class="chevron-btn">
-                {#if expanded}
-                    <ChevronDown size={14} />
-                {:else}
-                    <ChevronRight size={14} />
-                {/if}
-            </div>
-            <span class="header-title">Finished tasks</span>
-        </div>
-    </button>
-
-    {#if expanded}
-        <div class="sessions-grid" transition:slide>
+<Collapsible title="Finished" count={sessions.length}>
+    {#if sessions.length > 0}
+        <div class="rows">
             {#each sessions as session (session.id)}
-                <button
-                    class="session-card glass"
-                    onclick={() => openSession(session.id)}
-                >
-                    <div class="card-icon">
-                        {#if session.pr_url}
-                            <button
-                                class="pr-icon-btn"
-                                onclick={(e) => openPR(e, session.pr_url)}
-                                title="Open Pull Request"
-                            >
-                                <GitPullRequest
-                                    size={16}
-                                    class="text-success"
-                                />
-                            </button>
-                        {:else}
-                            <CheckCircle2 size={16} class="text-success" />
-                        {/if}
-                    </div>
-                    <div class="card-content">
-                        <span
-                            class="session-prompt"
-                            title={session.latest_run?.prompt}
-                        >
-                            {session.latest_run?.prompt || "Untitled task"}
+                <!-- The PR link sits beside the row rather than inside it: the
+                     previous build nested a <button> within a <button>, which
+                     is invalid markup and unreachable by keyboard. -->
+                <div class="pair">
+                    <button
+                        class="row"
+                        onclick={() => openSession(session.id)}
+                    >
+                        <span class="row__glyph" aria-hidden="true">
+                            <Check size={14} />
                         </span>
-                        <div class="session-meta">
-                            <span class="repo-name">{session.repo_name}</span>
-                            <span class="dot">•</span>
-                            <span class="time-ago">
-                                {new Date(
-                                    session.created_at,
-                                ).toLocaleDateString()}
+                        <span class="row__main">
+                            <span class="row__title">
+                                {session.latest_run?.prompt || "Untitled task"}
                             </span>
-                        </div>
-                    </div>
-                    <div class="card-menu">
-                        <MoreHorizontal size={14} />
-                    </div>
-                </button>
-            {/each}
+                            <span class="row__meta">
+                                <span class="truncate">{session.repo_name}</span>
+                                <span aria-hidden="true">·</span>
+                                <time datetime={session.created_at}>
+                                    {formatRelativeTime(session.created_at)}
+                                </time>
+                            </span>
+                        </span>
+                    </button>
 
-            {#if sessions.length === 0}
-                <div class="empty-state">
-                    <Clock size={24} class="opacity-30 mb-2" />
-                    <span>No finished tasks yet</span>
+                    {#if session.pr_url}
+                        <button
+                            class="btn btn-ghost btn-icon pair__pr"
+                            onclick={(e) => openPR(e, session.pr_url)}
+                            title="Open pull request"
+                            aria-label="Open pull request for this session"
+                        >
+                            <GitPullRequest size={14} />
+                        </button>
+                    {/if}
                 </div>
-            {/if}
+            {/each}
+        </div>
+    {:else}
+        <div class="empty">
+            <p class="empty__title">No finished runs</p>
+            <p>Completed sessions collect here.</p>
         </div>
     {/if}
-</div>
+</Collapsible>
 
 <style>
-    .session-history {
-        margin-top: 24px;
-        width: 100%;
-        max-width: 800px;
-        padding-bottom: 40px;
-    }
-
-    .list-header {
+    .pair {
         display: flex;
-        align-items: center;
-        width: 100%;
-        background: none;
-        border: none;
-        text-align: left;
-        gap: 8px;
-        padding: 8px 0;
-        cursor: pointer;
-        user-select: none;
-        color: var(--color-text-secondary);
-        margin-bottom: 8px;
-        font-family: inherit;
+        align-items: stretch;
+        border-block-end: var(--rule-hair) solid var(--color-rule);
+        min-inline-size: 0;
     }
 
-    .header-left {
+    .pair:last-child {
+        border-block-end: none;
+    }
+
+    .pair .row {
+        border-block-end: none;
+    }
+
+    .pair__pr {
+        flex: none;
+        color: var(--color-signal-add);
+        block-size: auto;
+    }
+
+    .row__glyph {
         display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .list-header:hover {
-        color: var(--color-text);
-    }
-
-    .chevron-btn {
-        background: none;
-        border: none;
-        padding: 0;
-        color: inherit;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-    }
-
-    .header-title {
-        font-size: 14px;
-        font-weight: 600;
-    }
-
-    .sessions-grid {
-        display: grid;
-        gap: 8px;
-    }
-
-    .session-card {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        width: 100%;
-        text-align: left;
-        background: transparent;
-        border: 1px solid transparent;
-        border-radius: 8px;
-        padding: 10px 12px;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-
-    .session-card:hover {
-        background: var(--color-bg-elevated);
-        border-color: var(--color-border);
-    }
-
-    .card-icon {
-        color: var(--color-success);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .card-content {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-    }
-
-    .session-prompt {
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--color-text);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .session-meta {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        color: var(--color-text-muted);
-    }
-
-    .repo-name {
-        font-weight: 500;
-    }
-
-    .card-menu {
-        color: var(--color-text-muted);
-        opacity: 0;
-        transition: opacity 0.2s;
-    }
-
-    .session-card:hover .card-menu {
-        opacity: 1;
-    }
-
-    .empty-state {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 32px;
-        color: var(--color-text-muted);
-        font-size: 13px;
-        border: 1px dashed var(--color-border);
-        border-radius: 8px;
-    }
-
-    .pr-icon-btn {
-        background: none;
-        border: none;
-        padding: 4px;
-        margin: -4px;
-        color: inherit;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        border-radius: 4px;
-        transition: background 0.2s;
-    }
-
-    .pr-icon-btn:hover {
-        background: rgba(16, 185, 129, 0.1);
-    }
-
-    /* Utility classes from global css reference */
-    :global(.text-success) {
-        color: var(--color-success);
-    }
-    :global(.opacity-30) {
-        opacity: 0.3;
-    }
-    :global(.mb-2) {
-        margin-bottom: 0.5rem;
+        flex: none;
+        color: var(--color-signal-add);
     }
 </style>

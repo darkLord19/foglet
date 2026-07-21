@@ -8,6 +8,8 @@ import type {
     RunSummary,
     SessionSummary,
     Settings,
+    Task,
+    TaskStatus,
 } from "./types";
 import {
     fetchDiff,
@@ -16,6 +18,8 @@ import {
     fetchSessionDetail,
     fetchSessions,
     fetchSettings,
+    fetchTasks,
+    moveTask,
     openRunStream,
     resolveAPIBaseURL,
     resolveAPIToken,
@@ -26,7 +30,7 @@ import {
 
 // ── App state ──
 
-export type ViewName = "new" | "detail" | "settings";
+export type ViewName = "board" | "new" | "detail" | "settings";
 
 class AppState {
     // Connection
@@ -37,9 +41,10 @@ class AppState {
     settings = $state<Settings | null>(null);
     repos = $state<Repo[]>([]);
     sessions = $state<SessionSummary[]>([]);
+    tasks = $state<Task[]>([]);
 
     // UI state
-    currentView = $state<ViewName>("new");
+    currentView = $state<ViewName>("board");
     selectedSessionID = $state("");
     selectedRunID = $state("");
     selectedTab = $state<"timeline" | "diff" | "logs" | "stats">("timeline");
@@ -73,6 +78,23 @@ class AppState {
 
     get completedSessions(): SessionSummary[] {
         return this.sessions.filter((s) => !this.isSessionRunning(s));
+    }
+
+    /** Tasks grouped into board columns, each already in position order. */
+    get board(): Record<TaskStatus, Task[]> {
+        const columns = {
+            todo: [] as Task[],
+            in_progress: [] as Task[],
+            in_review: [] as Task[],
+            done: [] as Task[],
+        };
+        for (const task of this.tasks) {
+            columns[task.status]?.push(task);
+        }
+        for (const key of Object.keys(columns) as TaskStatus[]) {
+            columns[key].sort((a, b) => a.position - b.position);
+        }
+        return columns;
     }
 
     get selectedRun(): RunSummary | null {
@@ -134,14 +156,16 @@ class AppState {
     }
 
     async refreshAll(): Promise<void> {
-        const [settings, repos, sessions] = await Promise.all([
+        const [settings, repos, sessions, tasks] = await Promise.all([
             fetchSettings(),
             fetchRepos(),
             fetchSessions(),
+            fetchTasks(),
         ]);
         this.settings = settings;
         this.repos = repos;
         this.sessions = sessions;
+        this.tasks = tasks;
 
         if (this.selectedSessionID) {
             await this.loadDetail();
@@ -164,6 +188,62 @@ class AppState {
 
     async refreshRepos(): Promise<void> {
         this.repos = await fetchRepos();
+    }
+
+    async refreshTasks(): Promise<void> {
+        this.tasks = await fetchTasks();
+    }
+
+    /**
+     * Apply a board move optimistically, then reconcile with the server.
+     *
+     * The card lands under the cursor immediately — waiting on a round trip
+     * makes drag feel broken. On failure the whole board is refetched rather
+     * than hand-rolling an inverse move, since the server may also have
+     * started a session as part of the same call.
+     */
+    async moveTaskTo(
+        taskID: string,
+        status: TaskStatus,
+        index: number,
+    ): Promise<{ started: boolean; kind?: string; sessionID?: string }> {
+        const before = this.tasks;
+        const moving = before.find((t) => t.id === taskID);
+        if (!moving) return { started: false };
+
+        const column = this.board[status].filter((t) => t.id !== taskID);
+        const prev = column[index - 1]?.position;
+        const next = column[index]?.position;
+        const optimistic =
+            prev !== undefined && next !== undefined
+                ? (prev + next) / 2
+                : next !== undefined
+                  ? next - 1
+                  : prev !== undefined
+                    ? prev + 1
+                    : 0;
+
+        this.tasks = before.map((t) =>
+            t.id === taskID ? { ...t, status, position: optimistic } : t,
+        );
+
+        try {
+            const res = await moveTask(taskID, status, index);
+            this.tasks = this.tasks.map((t) =>
+                t.id === taskID ? res.task : t,
+            );
+            if (res.started) {
+                await this.refreshSessions();
+            }
+            return {
+                started: res.started,
+                kind: res.kind,
+                sessionID: res.session_id,
+            };
+        } catch (err) {
+            await this.refreshTasks();
+            throw err;
+        }
     }
 
     async selectSession(

@@ -17,6 +17,14 @@ import type {
     UpdateSettingsPayload,
     Branch,
     GhStatus,
+    Task,
+    TaskStatus,
+    TaskResponse,
+    CreateTaskPayload,
+    UpdateTaskPayload,
+    TrackerConfig,
+    UpdateTrackerPayload,
+    SyncResult,
 } from "./types";
 
 let apiBaseURL = "http://127.0.0.1:8080";
@@ -269,4 +277,91 @@ export function openRunStream(
     };
 
     return source;
+}
+
+// ── Tasks ──
+
+export async function fetchTasks(): Promise<Task[]> {
+    return fetchJSON<Task[]>("/api/tasks");
+}
+
+export async function createTask(
+    payload: CreateTaskPayload,
+): Promise<TaskResponse> {
+    return fetchJSON<TaskResponse>("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function updateTask(
+    taskID: string,
+    payload: UpdateTaskPayload,
+): Promise<TaskResponse> {
+    return fetchJSON<TaskResponse>(
+        "/api/tasks/" + encodeURIComponent(taskID),
+        {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        },
+    );
+}
+
+export async function deleteTask(taskID: string): Promise<void> {
+    await fetchJSON<null>("/api/tasks/" + encodeURIComponent(taskID), {
+        method: "DELETE",
+    });
+}
+
+/**
+ * Move a card to a column at an index.
+ *
+ * The server decides whether this starts an agent — it is not a client
+ * choice. Dragging into In Progress from Fog's own UI counts as a local
+ * move and launches work; the same status arriving via tracker sync does
+ * not. See internal/api/tasks.go.
+ */
+export async function moveTask(
+    taskID: string,
+    status: TaskStatus,
+    index: number,
+): Promise<TaskResponse> {
+    return fetchJSON<TaskResponse>(
+        "/api/tasks/" + encodeURIComponent(taskID) + "/move",
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status, index }),
+        },
+    );
+}
+
+/** Explicitly start work — the affordance offered when auto-start was withheld. */
+export async function startTask(taskID: string): Promise<TaskResponse> {
+    return fetchJSON<TaskResponse>(
+        "/api/tasks/" + encodeURIComponent(taskID) + "/start",
+        { method: "POST" },
+    );
+}
+
+// ── Tracker ──
+
+export async function fetchTrackerConfig(): Promise<TrackerConfig> {
+    return fetchJSON<TrackerConfig>("/api/tracker");
+}
+
+export async function updateTrackerConfig(
+    payload: UpdateTrackerPayload,
+): Promise<TrackerConfig> {
+    return fetchJSON<TrackerConfig>("/api/tracker", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function syncTracker(): Promise<SyncResult> {
+    return fetchJSON<SyncResult>("/api/tracker/sync", { method: "POST" });
 }
