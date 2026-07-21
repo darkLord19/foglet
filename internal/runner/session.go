@@ -57,7 +57,7 @@ func (r *Runner) ContinueSession(sessionID, prompt string) (state.Run, error) {
 		return state.Run{}, err
 	}
 	err = r.executeSessionRun(session, run, execOpts)
-	updatedRun, found, runErr := r.state.GetRun(run.ID)
+	updatedRun, found, runErr := r.runs.GetRun(run.ID)
 	if runErr != nil {
 		return state.Run{}, runErr
 	}
@@ -129,7 +129,7 @@ func (r *Runner) ForkSessionAsync(sourceSessionID string, opts ForkSessionOption
 }
 
 func (r *Runner) prepareSession(opts StartSessionOptions) (state.Session, state.Run, sessionRunOptions, error) {
-	if r.state == nil {
+	if r.runs == nil {
 		return state.Session{}, state.Run{}, sessionRunOptions{}, errors.New("state store not configured")
 	}
 
@@ -180,7 +180,7 @@ func (r *Runner) prepareSession(opts StartSessionOptions) (state.Session, state.
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
-	if err := r.state.CreateSession(session); err != nil {
+	if err := r.runs.CreateSession(session); err != nil {
 		return state.Session{}, state.Run{}, sessionRunOptions{}, err
 	}
 
@@ -193,8 +193,8 @@ func (r *Runner) prepareSession(opts StartSessionOptions) (state.Session, state.
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
-	if err := r.state.CreateRun(run); err != nil {
-		_ = r.state.SetSessionBusy(session.ID, false)
+	if err := r.runs.CreateRun(run); err != nil {
+		_ = r.runs.SetSessionBusy(session.ID, false)
 		return state.Session{}, state.Run{}, sessionRunOptions{}, err
 	}
 
@@ -210,7 +210,7 @@ func (r *Runner) prepareSession(opts StartSessionOptions) (state.Session, state.
 }
 
 func (r *Runner) prepareFollowUpRun(sessionID, prompt string) (state.Session, state.Run, sessionRunOptions, error) {
-	if r.state == nil {
+	if r.runs == nil {
 		return state.Session{}, state.Run{}, sessionRunOptions{}, errors.New("state store not configured")
 	}
 	sessionID = strings.TrimSpace(sessionID)
@@ -222,7 +222,7 @@ func (r *Runner) prepareFollowUpRun(sessionID, prompt string) (state.Session, st
 		return state.Session{}, state.Run{}, sessionRunOptions{}, errors.New("prompt is required")
 	}
 
-	session, found, err := r.state.GetSession(sessionID)
+	session, found, err := r.runs.GetSession(sessionID)
 	if err != nil {
 		return state.Session{}, state.Run{}, sessionRunOptions{}, err
 	}
@@ -232,12 +232,12 @@ func (r *Runner) prepareFollowUpRun(sessionID, prompt string) (state.Session, st
 	if session.Busy {
 		return state.Session{}, state.Run{}, sessionRunOptions{}, fmt.Errorf("session %q is busy", sessionID)
 	}
-	if err := r.state.SetSessionBusy(session.ID, true); err != nil {
+	if err := r.runs.SetSessionBusy(session.ID, true); err != nil {
 		return state.Session{}, state.Run{}, sessionRunOptions{}, err
 	}
 	worktreePath := strings.TrimSpace(session.WorktreePath)
 	if worktreePath == "" {
-		_ = r.state.SetSessionBusy(session.ID, false)
+		_ = r.runs.SetSessionBusy(session.ID, false)
 		return state.Session{}, state.Run{}, sessionRunOptions{}, fmt.Errorf("session %q has no worktree path", session.ID)
 	}
 
@@ -253,16 +253,16 @@ func (r *Runner) prepareFollowUpRun(sessionID, prompt string) (state.Session, st
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
-	if err := r.state.CreateRun(run); err != nil {
-		_ = r.state.SetSessionBusy(session.ID, false)
+	if err := r.runs.CreateRun(run); err != nil {
+		_ = r.runs.SetSessionBusy(session.ID, false)
 		return state.Session{}, state.Run{}, sessionRunOptions{}, err
 	}
-	if err := r.state.UpdateSessionStatus(session.ID, "CREATED"); err != nil {
-		_ = r.state.SetSessionBusy(session.ID, false)
+	if err := r.runs.UpdateSessionStatus(session.ID, "CREATED"); err != nil {
+		_ = r.runs.SetSessionBusy(session.ID, false)
 		return state.Session{}, state.Run{}, sessionRunOptions{}, err
 	}
 
-	repo, _, _ := r.state.GetRepoByName(session.RepoName)
+	repo, _, _ := r.repos.GetRepoByName(session.RepoName)
 	baseBranch := strings.TrimSpace(repo.DefaultBranch)
 	if baseBranch == "" {
 		baseBranch = "main"
@@ -274,7 +274,7 @@ func (r *Runner) prepareFollowUpRun(sessionID, prompt string) (state.Session, st
 }
 
 func (r *Runner) prepareForkSession(sourceSessionID string, opts ForkSessionOptions) (StartSessionOptions, state.Session, error) {
-	if r.state == nil {
+	if r.runs == nil {
 		return StartSessionOptions{}, state.Session{}, errors.New("state store not configured")
 	}
 
@@ -297,7 +297,7 @@ func (r *Runner) prepareForkSession(sourceSessionID string, opts ForkSessionOpti
 		return StartSessionOptions{}, state.Session{}, errors.New("prompt is required")
 	}
 
-	sourceSession, found, err := r.state.GetSession(sourceSessionID)
+	sourceSession, found, err := r.runs.GetSession(sourceSessionID)
 	if err != nil {
 		return StartSessionOptions{}, state.Session{}, err
 	}
@@ -312,7 +312,7 @@ func (r *Runner) prepareForkSession(sourceSessionID string, opts ForkSessionOpti
 		return StartSessionOptions{}, state.Session{}, fmt.Errorf("session %q has no worktree path", sourceSessionID)
 	}
 
-	repo, found, err := r.state.GetRepoByName(sourceSession.RepoName)
+	repo, found, err := r.repos.GetRepoByName(sourceSession.RepoName)
 	if err != nil {
 		return StartSessionOptions{}, state.Session{}, err
 	}
@@ -375,10 +375,10 @@ func (r *Runner) prepareForkSession(sourceSessionID string, opts ForkSessionOpti
 }
 
 func (r *Runner) annotateForkRun(runID string, sourceSession state.Session) {
-	if r.state == nil {
+	if r.runs == nil {
 		return
 	}
-	_ = r.state.AppendRunEvent(state.RunEvent{
+	_ = r.runs.AppendRunEvent(state.RunEvent{
 		RunID:   runID,
 		Type:    "fork",
 		Message: fmt.Sprintf("Forked from session %s on branch %s", sourceSession.ID, sourceSession.Branch),
@@ -386,14 +386,14 @@ func (r *Runner) annotateForkRun(runID string, sourceSession state.Session) {
 }
 
 func (r *Runner) loadSessionAndRun(sessionID, runID string, runErr error) (state.Session, state.Run, error) {
-	updatedSession, found, sessionErr := r.state.GetSession(sessionID)
+	updatedSession, found, sessionErr := r.runs.GetSession(sessionID)
 	if sessionErr != nil {
 		return state.Session{}, state.Run{}, sessionErr
 	}
 	if !found {
 		return state.Session{}, state.Run{}, fmt.Errorf("session %q disappeared", sessionID)
 	}
-	updatedRun, found, getRunErr := r.state.GetRun(runID)
+	updatedRun, found, getRunErr := r.runs.GetRun(runID)
 	if getRunErr != nil {
 		return state.Session{}, state.Run{}, getRunErr
 	}
@@ -408,39 +408,39 @@ func (r *Runner) loadSessionAndRun(sessionID, runID string, runErr error) (state
 
 // GetSession returns one session by id.
 func (r *Runner) GetSession(id string) (state.Session, bool, error) {
-	if r.state == nil {
+	if r.runs == nil {
 		return state.Session{}, false, errors.New("state store not configured")
 	}
-	return r.state.GetSession(id)
+	return r.runs.GetSession(id)
 }
 
 // ListSessions returns all sessions ordered by updated time.
 func (r *Runner) ListSessions() ([]state.Session, error) {
-	if r.state == nil {
+	if r.runs == nil {
 		return nil, errors.New("state store not configured")
 	}
-	return r.state.ListSessions()
+	return r.runs.ListSessions()
 }
 
 // ListSessionRuns returns runs in one session.
 func (r *Runner) ListSessionRuns(sessionID string) ([]state.Run, error) {
-	if r.state == nil {
+	if r.runs == nil {
 		return nil, errors.New("state store not configured")
 	}
-	return r.state.ListRuns(sessionID)
+	return r.runs.ListRuns(sessionID)
 }
 
 // ListRunEvents returns run events in chronological order.
 func (r *Runner) ListRunEvents(runID string, limit int) ([]state.RunEvent, error) {
-	if r.state == nil {
+	if r.runs == nil {
 		return nil, errors.New("state store not configured")
 	}
-	return r.state.ListRunEvents(runID, limit)
+	return r.runs.ListRunEvents(runID, limit)
 }
 
 // CancelSessionLatestRun requests cancellation for the active latest run in a session.
 func (r *Runner) CancelSessionLatestRun(sessionID string) (state.Run, error) {
-	if r.state == nil {
+	if r.runs == nil {
 		return state.Run{}, errors.New("state store not configured")
 	}
 	sessionID = strings.TrimSpace(sessionID)
@@ -448,7 +448,7 @@ func (r *Runner) CancelSessionLatestRun(sessionID string) (state.Run, error) {
 		return state.Run{}, errors.New("session id is required")
 	}
 
-	session, found, err := r.state.GetSession(sessionID)
+	session, found, err := r.runs.GetSession(sessionID)
 	if err != nil {
 		return state.Run{}, err
 	}
@@ -456,7 +456,7 @@ func (r *Runner) CancelSessionLatestRun(sessionID string) (state.Run, error) {
 		return state.Run{}, fmt.Errorf("session %q: %w", sessionID, state.ErrNotFound)
 	}
 
-	latest, found, err := r.state.GetLatestRun(session.ID)
+	latest, found, err := r.runs.GetLatestRun(session.ID)
 	if err != nil {
 		return state.Run{}, err
 	}
@@ -480,7 +480,7 @@ func (r *Runner) CancelSessionLatestRun(sessionID string) (state.Run, error) {
 	if cancel != nil {
 		cancel()
 	}
-	_ = r.state.AppendRunEvent(state.RunEvent{
+	_ = r.runs.AppendRunEvent(state.RunEvent{
 		RunID:   latest.ID,
 		Type:    "cancel_requested",
 		Message: "Cancellation requested by user",

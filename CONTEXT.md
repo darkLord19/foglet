@@ -24,8 +24,10 @@ recover the tool conversation id that makes a follow-up resume rather than resta
 **Why it exists:** the run pipeline previously wrote directly to a concrete store, which made the
 180-line execution core unreachable by tests. See `internal/runner/session_exec.go`.
 
-**Hazard:** `Runner` holds both `state` and the seam fields. A `Runner` literal that sets only
-`state` reads no settings and has no run store. Construct through `New`.
+The Runner holds **no** `*state.Store`. Every route to session and run persistence goes through
+this seam, so a Runner built with fakes behaves like a real one instead of silently doing nothing.
+An earlier revision kept both a `state` field and the seams; a literal setting only `state` was
+half-wired and did nothing, which is why the field was removed rather than documented.
 
 ## Tool Factory
 

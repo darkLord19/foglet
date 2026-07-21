@@ -9,7 +9,7 @@ import (
 
 // newCountingRunner returns a runner backed by a real state store whose power
 // inhibitor counts acquire/release instead of spawning caffeinate.
-func newCountingRunner(t *testing.T) (*Runner, *int, *int) {
+func newCountingRunner(t *testing.T) (*Runner, *state.Store, *int, *int) {
 	t.Helper()
 	st, err := state.NewStore(t.TempDir())
 	if err != nil {
@@ -20,16 +20,16 @@ func newCountingRunner(t *testing.T) (*Runner, *int, *int) {
 	r := New(st)
 	var starts, stops int
 	r.power.SetAssertionHooks(func() { starts++ }, func() { stops++ })
-	return r, &starts, &stops
+	return r, st, &starts, &stops
 }
 
 // TestKeepAwakeReleasedWhenToggledOffMidRun is the regression test for the
 // ref-count leak: a run that acquired the assertion must release it on clear
 // even if keep_awake is switched off while the run is in flight.
 func TestKeepAwakeReleasedWhenToggledOffMidRun(t *testing.T) {
-	r, starts, stops := newCountingRunner(t)
+	r, st, starts, stops := newCountingRunner(t)
 
-	if err := r.state.SetSetting("keep_awake", "true"); err != nil {
+	if err := st.SetSetting("keep_awake", "true"); err != nil {
 		t.Fatalf("SetSetting on: %v", err)
 	}
 
@@ -39,7 +39,7 @@ func TestKeepAwakeReleasedWhenToggledOffMidRun(t *testing.T) {
 	}
 
 	// Toggle the setting off while the run is still active.
-	if err := r.state.SetSetting("keep_awake", "false"); err != nil {
+	if err := st.SetSetting("keep_awake", "false"); err != nil {
 		t.Fatalf("SetSetting off: %v", err)
 	}
 
@@ -55,7 +55,7 @@ func TestKeepAwakeReleasedWhenToggledOffMidRun(t *testing.T) {
 // TestKeepAwakeNotAcquiredWhenSettingOff verifies the assertion is untouched
 // for runs that start with keep_awake disabled, even if it is toggled on later.
 func TestKeepAwakeNotAcquiredWhenSettingOff(t *testing.T) {
-	r, starts, stops := newCountingRunner(t)
+	r, st, starts, stops := newCountingRunner(t)
 
 	// keep_awake defaults to off (unset).
 	r.registerActiveRun("sess-1", "run-1", context.CancelFunc(func() {}))
@@ -64,7 +64,7 @@ func TestKeepAwakeNotAcquiredWhenSettingOff(t *testing.T) {
 	}
 
 	// Toggle on mid-run; the already-registered run must not release on clear.
-	if err := r.state.SetSetting("keep_awake", "true"); err != nil {
+	if err := st.SetSetting("keep_awake", "true"); err != nil {
 		t.Fatalf("SetSetting on: %v", err)
 	}
 	r.clearActiveRun("sess-1", "run-1")

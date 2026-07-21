@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/darkLord19/foglet/internal/state"
 )
 
 // newLaunchRunner wires only what resolveLaunch needs. It deliberately has no
@@ -275,5 +277,47 @@ func TestResolveLaunchWithoutStoreReportsConfigError(t *testing.T) {
 	// Not a caller error: the daemon is misconfigured.
 	if errors.Is(err, ErrInvalidLaunch) || errors.Is(err, ErrUnknownRepo) {
 		t.Errorf("error = %v, want a configuration error, not a 4xx-shaped one", err)
+	}
+}
+
+// The Runner holds no *state.Store, so there is no way to build one that is
+// half-wired. This used to be a live hazard: a Runner literal setting only
+// `state` read no settings and had no run store, and it silently did nothing.
+func TestRunnerBuiltFromFakesIsFullyFunctional(t *testing.T) {
+	store := newFakeRunStore()
+	repos := fakeRepos{"acme/api": {Name: "acme/api", DefaultBranch: "develop"}}
+	settings := fakeSettings{"default_tool": "claude"}
+
+	r := &Runner{
+		runs:     store,
+		repos:    repos,
+		settings: settings,
+		tools:    toolFactory(&fakeTool{name: "claude", available: true}),
+		baseCtx:  context.Background(),
+		power:    newSilentInhibitor(),
+		active:   map[string]*activeRun{},
+	}
+
+	opts, err := r.resolveLaunch(LaunchRequest{RepoName: "acme/api", Prompt: "Add login"})
+	if err != nil {
+		t.Fatalf("resolveLaunch: %v", err)
+	}
+	if opts.Tool != "claude" {
+		t.Errorf("Tool = %q, want the faked default", opts.Tool)
+	}
+	if opts.BaseBranch != "develop" {
+		t.Errorf("BaseBranch = %q, want the faked repo default", opts.BaseBranch)
+	}
+
+	// Reads go through the same seam, so a fake-built Runner answers queries.
+	if err := store.CreateSession(state.Session{ID: "s1", RepoName: "acme/api"}); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	sessions, err := r.ListSessions()
+	if err != nil {
+		t.Fatalf("ListSessions: %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].ID != "s1" {
+		t.Errorf("ListSessions = %+v, want the seeded session", sessions)
 	}
 }

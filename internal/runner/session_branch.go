@@ -19,10 +19,10 @@ func (r *Runner) ResolveBranch(repoPath, requested, prompt string) (string, erro
 
 // branchPrefix returns the configured branch prefix, or "" to accept the default.
 func (r *Runner) branchPrefix() string {
-	if r == nil || r.state == nil {
+	if r == nil || r.runs == nil {
 		return ""
 	}
-	stored, found, err := r.state.GetSetting("branch_prefix")
+	stored, found, err := r.settings.GetSetting("branch_prefix")
 	if err != nil || !found {
 		return ""
 	}
@@ -32,10 +32,10 @@ func (r *Runner) branchPrefix() string {
 // SessionDiff returns the diff stat and diff patch for a session's branch
 // against its base branch.
 func (r *Runner) SessionDiff(sessionID string) (diffStat, diffPatch string, err error) {
-	if r.state == nil {
+	if r.runs == nil {
 		return "", "", errors.New("state store not configured")
 	}
-	session, found, err := r.state.GetSession(sessionID)
+	session, found, err := r.runs.GetSession(sessionID)
 	if err != nil {
 		return "", "", err
 	}
@@ -43,7 +43,7 @@ func (r *Runner) SessionDiff(sessionID string) (diffStat, diffPatch string, err 
 		return "", "", fmt.Errorf("session %q: %w", sessionID, state.ErrNotFound)
 	}
 
-	repo, found, err := r.state.GetRepoByName(session.RepoName)
+	repo, found, err := r.repos.GetRepoByName(session.RepoName)
 	if err != nil {
 		return "", "", err
 	}
@@ -52,7 +52,7 @@ func (r *Runner) SessionDiff(sessionID string) (diffStat, diffPatch string, err 
 	}
 
 	worktreePath := strings.TrimSpace(session.WorktreePath)
-	if latest, found, err := r.state.GetLatestRun(session.ID); err == nil && found && strings.TrimSpace(latest.WorktreePath) != "" {
+	if latest, found, err := r.runs.GetLatestRun(session.ID); err == nil && found && strings.TrimSpace(latest.WorktreePath) != "" {
 		worktreePath = strings.TrimSpace(latest.WorktreePath)
 	}
 	if worktreePath == "" {

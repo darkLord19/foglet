@@ -15,14 +15,20 @@ import (
 //
 // See CONTEXT.md for why the pipeline's phases are deliberately *not* a seam.
 
-// RunStore is the session and run state a run reads and writes as it executes.
+// RunStore is the session and run state the runner reads and writes.
 //
-// It is narrow by intent: repos, settings, secrets and task state are not part of
-// it, even though *state.Store provides them. The reads that are included earn
-// their place — GetLatestRun gates whether a run may still write session status,
-// and ListRuns/ListRunEvents recover the tool conversation id that makes a
-// follow-up resume rather than restart.
+// Narrow by intent: 14 methods against *state.Store's 43. Repos, settings,
+// secrets and task state are reached through their own seams or not at all.
+//
+// This is the runner's only route to session and run persistence — the Runner
+// holds no *state.Store — so a Runner built with fakes behaves like a real one
+// rather than silently doing nothing.
 type RunStore interface {
+	CreateSession(session state.Session) error
+	GetSession(id string) (state.Session, bool, error)
+	ListSessions() ([]state.Session, error)
+	CreateRun(run state.Run) error
+	GetRun(id string) (state.Run, bool, error)
 	SetRunState(id, state string) error
 	CompleteRun(id, state, commitSHA, commitMsg, runErr string) error
 	AppendRunEvent(event state.RunEvent) error

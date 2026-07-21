@@ -16,7 +16,6 @@ import (
 
 // Runner orchestrates AI task execution
 type Runner struct {
-	state    *state.Store
 	runs     RunStore
 	repos    RepoReader
 	settings SettingsReader
@@ -33,7 +32,6 @@ type Runner struct {
 // no repository of its own.
 func New(st *state.Store) *Runner {
 	r := &Runner{
-		state:   st,
 		tools:   ai.GetTool,
 		baseCtx: context.Background(),
 		power:   power.New(),

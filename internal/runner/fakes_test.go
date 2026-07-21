@@ -63,6 +63,69 @@ func (f *fakeRunStore) check(method string) error {
 	return nil
 }
 
+func (f *fakeRunStore) CreateSession(session state.Session) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.check("CreateSession"); err != nil {
+		return err
+	}
+	copied := session
+	f.sessions[session.ID] = &copied
+	return nil
+}
+
+func (f *fakeRunStore) GetSession(id string) (state.Session, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.check("GetSession"); err != nil {
+		return state.Session{}, false, err
+	}
+	session, ok := f.sessions[id]
+	if !ok {
+		return state.Session{}, false, nil
+	}
+	return *session, true, nil
+}
+
+func (f *fakeRunStore) ListSessions() ([]state.Session, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.check("ListSessions"); err != nil {
+		return nil, err
+	}
+	out := make([]state.Session, 0, len(f.sessions))
+	for _, session := range f.sessions {
+		out = append(out, *session)
+	}
+	return out, nil
+}
+
+func (f *fakeRunStore) CreateRun(run state.Run) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.check("CreateRun"); err != nil {
+		return err
+	}
+	copied := run
+	f.runs[run.ID] = &copied
+	f.latestRunID = run.ID
+	f.latestSession = run.SessionID
+	return nil
+}
+
+func (f *fakeRunStore) GetRun(id string) (state.Run, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.check("GetRun"); err != nil {
+		return state.Run{}, false, err
+	}
+	run, ok := f.runs[id]
+	if !ok {
+		return state.Run{}, false, nil
+	}
+	return *run, true, nil
+}
+
 func (f *fakeRunStore) SetRunState(id, runState string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
