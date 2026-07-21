@@ -375,15 +375,48 @@ func newSilentInhibitor() *power.Inhibitor {
 
 // newTestRunner builds a Runner wired entirely to fakes.
 func newTestRunner(store *fakeRunStore, tool *fakeTool, settings fakeSettings) *Runner {
+	return newTestRunnerWithPublisher(store, tool, settings, &fakePublisher{})
+}
+
+// newTestRunnerWithPublisher wires a Runner entirely to fakes, including the
+// pull-request publisher.
+func newTestRunnerWithPublisher(store *fakeRunStore, tool *fakeTool, settings fakeSettings, pub Publisher) *Runner {
 	if settings == nil {
 		settings = fakeSettings{}
 	}
 	return &Runner{
-		runs:     store,
-		settings: settings,
-		tools:    toolFactory(tool),
-		baseCtx:  context.Background(),
-		power:    newSilentInhibitor(),
-		active:   map[string]*activeRun{},
+		runs:      store,
+		settings:  settings,
+		tools:     toolFactory(tool),
+		publisher: pub,
+		baseCtx:   context.Background(),
+		power:     newSilentInhibitor(),
+		active:    map[string]*activeRun{},
 	}
+}
+
+// fakePublisher stands in for the gh CLI.
+type fakePublisher struct {
+	mu        sync.Mutex
+	available bool
+	url       string
+	err       error
+	calls     int
+	gotBase   string
+	gotBranch string
+	gotTitle  string
+	gotDraft  bool
+}
+
+func (f *fakePublisher) Available() bool { return f.available }
+
+func (f *fakePublisher) CreatePR(_ context.Context, _, title, _, baseBranch, branch string, draft bool) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	f.gotTitle, f.gotBase, f.gotBranch, f.gotDraft = title, baseBranch, branch, draft
+	if f.err != nil {
+		return "", f.err
+	}
+	return f.url, nil
 }

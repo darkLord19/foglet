@@ -1,7 +1,10 @@
 package runner
 
 import (
+	"context"
+
 	"github.com/darkLord19/foglet/internal/ai"
+	"github.com/darkLord19/foglet/internal/ghcli"
 	"github.com/darkLord19/foglet/internal/state"
 )
 
@@ -55,6 +58,30 @@ type RepoReader interface {
 	GetRepoByName(name string) (state.Repo, bool, error)
 }
 
+// Publisher opens a pull request for a session branch.
+//
+// Fog shells out to the gh CLI for this. It is the last dependency in the run
+// pipeline that a test cannot satisfy — it needs a gh binary, a git remote and
+// a network — so the push/PR branch of executeSessionRun was unreachable even
+// after the other seams landed.
+//
+// Available is separate from CreatePR because the pipeline checks availability
+// first and reports a distinct error; folding them together would make "gh is
+// not installed" and "opening the PR failed" indistinguishable.
+type Publisher interface {
+	Available() bool
+	CreatePR(ctx context.Context, workdir, title, body, baseBranch, branch string, draft bool) (string, error)
+}
+
+// ghPublisher is the production Publisher, backed by the gh CLI.
+type ghPublisher struct{}
+
+func (ghPublisher) Available() bool { return ghcli.IsGhAvailable() }
+
+func (ghPublisher) CreatePR(ctx context.Context, workdir, title, body, baseBranch, branch string, draft bool) (string, error) {
+	return ghcli.CreatePRWithContext(ctx, workdir, title, body, baseBranch, branch, draft)
+}
+
 // ToolFactory resolves a canonical tool name to an AI tool adapter.
 //
 // ai.GetTool is the production factory. It reports an error for unknown names and
@@ -68,4 +95,5 @@ var (
 	_ SettingsReader = (*state.Store)(nil)
 	_ RepoReader     = (*state.Store)(nil)
 	_ ToolFactory    = ai.GetTool
+	_ Publisher      = ghPublisher{}
 )

@@ -16,14 +16,15 @@ import (
 
 // Runner orchestrates AI task execution
 type Runner struct {
-	runs     RunStore
-	repos    RepoReader
-	settings SettingsReader
-	tools    ToolFactory
-	baseCtx  context.Context
-	power    *power.Inhibitor
-	mu       sync.Mutex
-	active   map[string]*activeRun
+	runs      RunStore
+	repos     RepoReader
+	settings  SettingsReader
+	tools     ToolFactory
+	publisher Publisher
+	baseCtx   context.Context
+	power     *power.Inhibitor
+	mu        sync.Mutex
+	active    map[string]*activeRun
 }
 
 // New creates a new runner. The state store st is optional (may be nil).
@@ -32,10 +33,11 @@ type Runner struct {
 // no repository of its own.
 func New(st *state.Store) *Runner {
 	r := &Runner{
-		tools:   ai.GetTool,
-		baseCtx: context.Background(),
-		power:   power.New(),
-		active:  make(map[string]*activeRun),
+		tools:     ai.GetTool,
+		publisher: ghPublisher{},
+		baseCtx:   context.Background(),
+		power:     power.New(),
+		active:    make(map[string]*activeRun),
 	}
 	// Assigned only when non-nil: a nil *state.Store stored in an interface is
 	// itself non-nil, which would turn every nil-store guard into a panic.

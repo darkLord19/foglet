@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/darkLord19/foglet/internal/ghcli"
 	"github.com/darkLord19/foglet/internal/git"
 	"github.com/darkLord19/foglet/internal/proc"
 )
@@ -55,7 +54,7 @@ func (r *Runner) pushBranch(ctx context.Context, workdir, branch string, setUpst
 }
 
 func (r *Runner) createDraftPR(ctx context.Context, workdir, baseBranch, branch, prompt, tool, sessionID, customTitle string) (string, error) {
-	if !ghcli.IsGhAvailable() {
+	if r.publisher == nil || !r.publisher.Available() {
 		return "", fmt.Errorf("gh CLI not available")
 	}
 	title := resolvePRTitle(customTitle, prompt)
@@ -65,7 +64,7 @@ func (r *Runner) createDraftPR(ctx context.Context, workdir, baseBranch, branch,
 		strings.TrimSpace(prompt),
 	)
 
-	return ghcli.CreatePRWithContext(ctx, workdir, title, body, baseBranch, branch, true)
+	return r.publisher.CreatePR(ctx, workdir, title, body, baseBranch, branch, true)
 }
 
 func withOutput(err error, output []byte) error {

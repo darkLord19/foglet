@@ -638,3 +638,148 @@ func gitLastCommitMessage(t *testing.T, dir string) string {
 	}
 	return strings.TrimSpace(string(out))
 }
+
+// ── publish phase ───────────────────────────────────────────────────────────
+//
+// Until the Publisher seam existed these were unreachable: opening a PR needed
+// a gh binary, a git remote and a network.
+
+// initTestWorktreeWithRemote gives the worktree a local bare remote so a push
+// succeeds without a network.
+func initTestWorktreeWithRemote(t *testing.T) string {
+	t.Helper()
+	remote := t.TempDir()
+	bare := exec.Command("git", "init", "--bare", remote)
+	if out, err := bare.CombinedOutput(); err != nil {
+		t.Fatalf("git init --bare: %v\n%s", err, out)
+	}
+
+	dir := initTestWorktree(t)
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+	}
+	run("remote", "add", "origin", remote)
+	run("branch", "-M", "fog/test")
+	return dir
+}
+
+func TestExecuteSessionRunOpensDraftPRWhenAutoPRSet(t *testing.T) {
+	store := newFakeRunStore()
+	store.seed("session-1", "run-1")
+	pub := &fakePublisher{available: true, url: "https://example.invalid/pr/7"}
+	r := newTestRunnerWithPublisher(store, &fakeTool{name: "claude", available: true, output: "ok"}, nil, pub)
+
+	wt := initTestWorktreeWithRemote(t)
+	writeFile(t, wt, "feature.txt", "work")
+
+	session := testSession(wt)
+	session.AutoPR = true
+
+	if err := r.executeSessionRun(session, testRun(wt), sessionRunOptions{
+		Prompt:     "add a feature",
+		BaseBranch: "main",
+		CommitMsg:  "feat: x",
+		PRTitle:    "Add a feature",
+	}); err != nil {
+		t.Fatalf("executeSessionRun: %v", err)
+	}
+
+	if pub.calls != 1 {
+		t.Fatalf("publisher called %d times, want 1", pub.calls)
+	}
+	if !pub.gotDraft {
+		t.Error("PR was not opened as a draft")
+	}
+	if pub.gotBase != "main" || pub.gotBranch != "fog/test" {
+		t.Errorf("PR base/branch = %q/%q, want main/fog/test", pub.gotBase, pub.gotBranch)
+	}
+	if pub.gotTitle != "Add a feature" {
+		t.Errorf("PR title = %q, want the supplied one", pub.gotTitle)
+	}
+	if len(store.prURLs) != 1 || store.prURLs[0] != "https://example.invalid/pr/7" {
+		t.Errorf("PR URL not persisted: %v", store.prURLs)
+	}
+	if event, found := store.eventOfType("pr"); !found || !strings.Contains(event.Message, "pr/7") {
+		t.Errorf("no pr event recorded (found=%v, event=%+v)", found, event)
+	}
+}
+
+func TestExecuteSessionRunFailsRunWhenPRCreationFails(t *testing.T) {
+	store := newFakeRunStore()
+	store.seed("session-1", "run-1")
+	pub := &fakePublisher{available: true, err: errors.New("gh exploded")}
+	r := newTestRunnerWithPublisher(store, &fakeTool{name: "claude", available: true, output: "ok"}, nil, pub)
+
+	wt := initTestWorktreeWithRemote(t)
+	writeFile(t, wt, "feature.txt", "work")
+
+	session := testSession(wt)
+	session.AutoPR = true
+
+	if err := r.executeSessionRun(session, testRun(wt), sessionRunOptions{
+		Prompt: "add a feature", BaseBranch: "main", CommitMsg: "feat: x",
+	}); err == nil {
+		t.Fatal("expected the PR failure to fail the run")
+	}
+	if got := lastString(store.runStates); got != "FAILED" {
+		t.Errorf("terminal state = %q, want FAILED", got)
+	}
+	if !store.busyCleared() {
+		t.Error("session left busy after a PR failure")
+	}
+}
+
+func TestExecuteSessionRunFailsWhenGhUnavailable(t *testing.T) {
+	store := newFakeRunStore()
+	store.seed("session-1", "run-1")
+	pub := &fakePublisher{available: false}
+	r := newTestRunnerWithPublisher(store, &fakeTool{name: "claude", available: true, output: "ok"}, nil, pub)
+
+	wt := initTestWorktreeWithRemote(t)
+	writeFile(t, wt, "feature.txt", "work")
+
+	session := testSession(wt)
+	session.AutoPR = true
+
+	err := r.executeSessionRun(session, testRun(wt), sessionRunOptions{
+		Prompt: "add a feature", BaseBranch: "main", CommitMsg: "feat: x",
+	})
+	if err == nil {
+		t.Fatal("expected an error when gh is unavailable")
+	}
+	if pub.calls != 0 {
+		t.Error("publisher was called despite reporting unavailable")
+	}
+}
+
+// An existing PR means the branch is pushed but no second PR is opened.
+func TestExecuteSessionRunPushesWithoutReopeningExistingPR(t *testing.T) {
+	store := newFakeRunStore()
+	store.seed("session-1", "run-1")
+	pub := &fakePublisher{available: true, url: "https://example.invalid/pr/9"}
+	r := newTestRunnerWithPublisher(store, &fakeTool{name: "claude", available: true, output: "ok"}, nil, pub)
+
+	wt := initTestWorktreeWithRemote(t)
+	writeFile(t, wt, "feature.txt", "work")
+
+	session := testSession(wt)
+	session.AutoPR = true
+	session.PRURL = "https://example.invalid/pr/1" // already open
+
+	if err := r.executeSessionRun(session, testRun(wt), sessionRunOptions{
+		Prompt: "add a feature", BaseBranch: "main", CommitMsg: "feat: x",
+	}); err != nil {
+		t.Fatalf("executeSessionRun: %v", err)
+	}
+	if pub.calls != 0 {
+		t.Errorf("publisher called %d times, want 0 — a PR already exists", pub.calls)
+	}
+	if len(store.prURLs) != 0 {
+		t.Errorf("PR URL rewritten: %v", store.prURLs)
+	}
+}
