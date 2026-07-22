@@ -22,9 +22,6 @@ const (
 	trackerJiraURL      = "tracker.jira.url"
 	trackerJiraEmail    = "tracker.jira.email"
 	trackerJiraJQL      = "tracker.jira.jql"
-
-	trackerLinearTokenSecret = "tracker.linear.token"
-	trackerJiraTokenSecret   = "tracker.jira.token"
 )
 
 // TrackerConfig is the tracker setup as the UI sees it.
@@ -139,9 +136,10 @@ func (s *Server) updateTracker(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if token := strings.TrimSpace(req.Token); token != "" {
-		secretKey := trackerLinearTokenSecret
-		if provider == task.ProviderJira {
-			secretKey = trackerJiraTokenSecret
+		secretKey, ok := tracker.SecretKeyFor(provider)
+		if !ok {
+			writeErr(w, http.StatusBadRequest, "provider "+string(provider)+" does not take a token")
+			return
 		}
 		if err := s.stateStore.SaveSecret(secretKey, token); err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
@@ -180,53 +178,56 @@ func (s *Server) trackerConfig() (TrackerConfig, error) {
 		}
 	}
 
-	secretKey := trackerLinearTokenSecret
-	if cfg.Provider == string(task.ProviderJira) {
-		secretKey = trackerJiraTokenSecret
+	if secretKey, ok := tracker.SecretKeyFor(task.Provider(cfg.Provider)); ok {
+		has, err := s.stateStore.HasSecret(secretKey)
+		if err != nil {
+			return cfg, err
+		}
+		cfg.HasToken = has
 	}
-	has, err := s.stateStore.HasSecret(secretKey)
-	if err != nil {
-		return cfg, err
-	}
-	cfg.HasToken = has
 
 	return cfg, nil
 }
 
 // buildProvider constructs the configured tracker provider, or returns
 // tracker.ErrNotConfigured when there is nothing to sync with.
+//
+// Which credentials a provider needs, and where its token lives, is declared by
+// internal/tracker. This function only reads them.
 func (s *Server) buildProvider() (tracker.Provider, tracker.StatusMap, error) {
 	cfg, err := s.trackerConfig()
 	if err != nil {
 		return nil, tracker.StatusMap{}, err
 	}
 
-	switch task.Provider(cfg.Provider) {
-	case task.ProviderLinear:
-		token, found, err := s.stateStore.GetSecret(trackerLinearTokenSecret)
-		if err != nil {
-			return nil, cfg.StatusMap, err
-		}
-		if !found {
-			return nil, cfg.StatusMap, tracker.ErrNotConfigured
-		}
-		p, err := tracker.NewLinear(token, cfg.LinearTeam, cfg.StatusMap)
-		return p, cfg.StatusMap, err
-
-	case task.ProviderJira:
-		token, found, err := s.stateStore.GetSecret(trackerJiraTokenSecret)
-		if err != nil {
-			return nil, cfg.StatusMap, err
-		}
-		if !found {
-			return nil, cfg.StatusMap, tracker.ErrNotConfigured
-		}
-		p, err := tracker.NewJira(cfg.JiraURL, cfg.JiraEmail, token, cfg.JiraJQL, cfg.StatusMap)
-		return p, cfg.StatusMap, err
-
-	default:
+	provider := task.Provider(cfg.Provider)
+	desc, ok := tracker.Describe(provider)
+	if !ok {
 		return nil, cfg.StatusMap, tracker.ErrNotConfigured
 	}
+
+	token, found, err := s.stateStore.GetSecret(desc.SecretKey)
+	if err != nil {
+		return nil, cfg.StatusMap, err
+	}
+	if !found {
+		return nil, cfg.StatusMap, tracker.ErrNotConfigured
+	}
+
+	settings := make(map[string]string, len(desc.SettingKeys))
+	for _, key := range desc.SettingKeys {
+		value, _, err := s.stateStore.GetSetting(key)
+		if err != nil {
+			return nil, cfg.StatusMap, err
+		}
+		settings[key] = value
+	}
+
+	p, err := tracker.NewProvider(provider, tracker.Credentials{
+		Token:    token,
+		Settings: settings,
+	}, cfg.StatusMap)
+	return p, cfg.StatusMap, err
 }
 
 // SyncTracker runs one reconciliation pass. Exported so the daemon's periodic
