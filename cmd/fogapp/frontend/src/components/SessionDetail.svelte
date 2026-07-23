@@ -122,6 +122,11 @@
     function openPR() {
         openExternal(session?.pr_url);
     }
+
+    function goBoard() {
+        appState.selectedSessionID = "";
+        appState.setView("board");
+    }
 </script>
 
 {#if session}
@@ -131,6 +136,7 @@
             {latestRun}
             {isBusy}
             title={titleText}
+            onBack={goBoard}
             onRerun={handleRerun}
             onFork={handleFork}
             onStop={handleStop}

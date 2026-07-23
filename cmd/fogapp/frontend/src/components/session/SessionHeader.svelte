@@ -6,6 +6,7 @@
         Code,
         Square,
         GitPullRequest,
+        ArrowLeft,
     } from "@lucide/svelte";
 
     let {
@@ -13,6 +14,7 @@
         latestRun,
         isBusy,
         title,
+        onBack,
         onRerun,
         onFork,
         onStop,
@@ -23,6 +25,7 @@
         latestRun?: RunSummary;
         isBusy: boolean;
         title: string;
+        onBack: () => void;
         onRerun: () => void;
         onFork: () => void;
         onStop: () => void;
@@ -43,6 +46,14 @@
 
 <header class="head">
     <div class="head__top">
+        <button
+            class="btn btn-ghost btn-icon head__back"
+            title="Back to board"
+            aria-label="Back to board"
+            onclick={onBack}
+        >
+            <ArrowLeft size={16} />
+        </button>
         <div class="head__id">
             <p class="head__crumb mono">
                 <span class="truncate">{session.repo_name}</span>
@@ -124,6 +135,11 @@
         justify-content: space-between;
         gap: var(--space-md);
         min-inline-size: 0;
+    }
+
+    .head__back {
+        flex: none;
+        margin-block-start: var(--space-3xs);
     }
 
     .head__id {

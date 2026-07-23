@@ -4,7 +4,7 @@
     import { updateSettings } from "$lib/api";
     import { getModelsForTool } from "$lib/constants";
     import type { UpdateSettingsPayload } from "$lib/types";
-    import { Cpu, Zap } from "@lucide/svelte";
+    import { Cpu, Zap, ArrowLeft } from "@lucide/svelte";
     import Dropdown from "./Dropdown.svelte";
     import ToggleField from "./settings/ToggleField.svelte";
     import RepoManager from "./settings/RepoManager.svelte";
@@ -85,6 +85,13 @@
 <div class="st scroll-y">
     <div class="st__inner shell-width">
         <header class="section-head reveal" style="--i: 0">
+            <button
+                class="btn btn-ghost btn-sm st__back"
+                onclick={() => appState.setView("board")}
+            >
+                <ArrowLeft size={14} />
+                <span>Board</span>
+            </button>
             <h1 class="section-head__title">Settings</h1>
             <p class="section-head__sub">
                 Defaults for new sessions, and the repositories Fog can work in.
@@ -249,6 +256,11 @@
         gap: var(--space-xl);
         padding-block: var(--space-xl) var(--space-2xl);
         max-inline-size: 56rem;
+    }
+
+    .st__back {
+        align-self: flex-start;
+        margin-block-end: var(--space-xs);
     }
 
     .st__sec {
