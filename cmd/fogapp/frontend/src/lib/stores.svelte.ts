@@ -1,7 +1,8 @@
 // ── Global reactive state using Svelte 5 runes ──
 
-import { ACTIVE_STATES } from "./types";
+import { ACTIVE_STATES, BOARD_WINDOWS } from "./types";
 import type {
+    BoardWindow,
     DiffResult,
     Repo,
     RunEvent,
@@ -18,8 +19,12 @@ import {
     fetchSessionDetail,
     fetchSessions,
     fetchSettings,
+    deleteTask,
     fetchTasks,
+    fetchTrashedTasks,
     moveTask,
+    purgeTask,
+    restoreTask,
     openRunStream,
     resolveAPIBaseURL,
     resolveAPIToken,
@@ -32,6 +37,21 @@ import {
 
 export type ViewName = "board" | "new" | "detail" | "settings";
 
+const BOARD_WINDOW_KEY = "fog.boardWindow";
+
+/** Restore the last-picked board window, defaulting to the 7-day view. */
+function loadBoardWindow(): BoardWindow {
+    try {
+        const saved = localStorage.getItem(BOARD_WINDOW_KEY);
+        if (saved && BOARD_WINDOWS.some((w) => w.id === saved)) {
+            return saved as BoardWindow;
+        }
+    } catch {
+        // ignore unavailable storage
+    }
+    return "week";
+}
+
 class AppState {
     // Connection
     daemonStatus = $state<"connecting" | "connected" | "unavailable">("connecting");
@@ -42,9 +62,12 @@ class AppState {
     repos = $state<Repo[]>([]);
     sessions = $state<SessionSummary[]>([]);
     tasks = $state<Task[]>([]);
+    trashedTasks = $state<Task[]>([]);
 
     // UI state
     currentView = $state<ViewName>("board");
+    boardWindow = $state<BoardWindow>(loadBoardWindow());
+    showTrash = $state(false);
     selectedSessionID = $state("");
     selectedRunID = $state("");
     selectedTab = $state<"timeline" | "diff" | "logs" | "stats">("timeline");
@@ -97,6 +120,47 @@ class AppState {
         return columns;
     }
 
+    /**
+     * The board as rendered: identical to {@link board} for live columns, but
+     * with finished cards aged out of Done once they fall outside the selected
+     * timeline window. Live work is never hidden — only completed work drifts
+     * off the board as it gets older. `board` stays the unfiltered source of
+     * truth for positioning and keyboard moves.
+     */
+    get visibleBoard(): Record<TaskStatus, Task[]> {
+        const full = this.board;
+        const cutoff = this.boardCutoff();
+        if (cutoff === null) return full;
+        return {
+            ...full,
+            done: full.done.filter(
+                (t) => new Date(t.updated_at).getTime() >= cutoff,
+            ),
+        };
+    }
+
+    /** Done cards hidden by the current window (0 when showing all). */
+    get hiddenDoneCount(): number {
+        return this.board.done.length - this.visibleBoard.done.length;
+    }
+
+    /** Epoch millis a Done card must reach to stay visible, or null for all. */
+    private boardCutoff(): number | null {
+        const days = BOARD_WINDOWS.find(
+            (w) => w.id === this.boardWindow,
+        )?.days;
+        if (days === null || days === undefined) return null;
+        if (days === 0) {
+            const now = new Date();
+            return new Date(
+                now.getFullYear(),
+                now.getMonth(),
+                now.getDate(),
+            ).getTime();
+        }
+        return Date.now() - days * 86_400_000;
+    }
+
     get selectedRun(): RunSummary | null {
         const found = this.detailRuns.find((r) => r.id === this.selectedRunID);
         return found ?? this.detailRuns[0] ?? null;
@@ -125,6 +189,15 @@ class AppState {
         this.currentView = view;
         if (view !== "detail") {
             this.closeStream();
+        }
+    }
+
+    setBoardWindow(window: BoardWindow): void {
+        this.boardWindow = window;
+        try {
+            localStorage.setItem(BOARD_WINDOW_KEY, window);
+        } catch {
+            // storage is best-effort; the choice still holds for this session.
         }
     }
 
@@ -242,6 +315,53 @@ class AppState {
             };
         } catch (err) {
             await this.refreshTasks();
+            throw err;
+        }
+    }
+
+    /**
+     * Move a task to trash, dropping it from the board immediately and
+     * reverting if the server rejects it. Trashing stops any active session on
+     * the task but keeps its worktree, so it stays recoverable until retention
+     * expires. Sessions are refreshed since one may have just been stopped.
+     */
+    async trashTaskByID(taskID: string): Promise<void> {
+        const before = this.tasks;
+        this.tasks = before.filter((t) => t.id !== taskID);
+        try {
+            await deleteTask(taskID);
+            await this.refreshSessions();
+        } catch (err) {
+            this.tasks = before;
+            throw err;
+        }
+    }
+
+    async refreshTrash(): Promise<void> {
+        this.trashedTasks = await fetchTrashedTasks();
+    }
+
+    /** Restore a trashed task back onto the board. */
+    async restoreTaskByID(taskID: string): Promise<void> {
+        const before = this.trashedTasks;
+        this.trashedTasks = before.filter((t) => t.id !== taskID);
+        try {
+            const res = await restoreTask(taskID);
+            this.tasks = [...this.tasks, res.task];
+        } catch (err) {
+            this.trashedTasks = before;
+            throw err;
+        }
+    }
+
+    /** Permanently delete a trashed task, reclaiming its worktree and branch. */
+    async purgeTaskByID(taskID: string): Promise<void> {
+        const before = this.trashedTasks;
+        this.trashedTasks = before.filter((t) => t.id !== taskID);
+        try {
+            await purgeTask(taskID);
+        } catch (err) {
+            this.trashedTasks = before;
             throw err;
         }
     }

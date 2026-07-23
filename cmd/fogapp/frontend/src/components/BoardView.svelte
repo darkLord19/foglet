@@ -1,10 +1,11 @@
 <script lang="ts">
     import { appState } from "$lib/stores.svelte";
     import { startTask } from "$lib/api";
-    import { TASK_COLUMNS } from "$lib/types";
+    import { TASK_COLUMNS, BOARD_WINDOWS } from "$lib/types";
     import type { Task, TaskStatus } from "$lib/types";
     import { toast } from "svelte-sonner";
-    import { Plus } from "@lucide/svelte";
+    import { Plus, Settings, Trash2, RotateCcw } from "@lucide/svelte";
+    import { formatRelativeTime } from "$lib/utils";
     import TaskCard from "./board/TaskCard.svelte";
     import NewTaskDialog from "./board/NewTaskDialog.svelte";
 
@@ -13,7 +14,10 @@
     let overIndex = $state(-1);
     let showNew = $state(false);
 
+    // `board` is the unfiltered source of truth for positioning and keyboard
+    // moves; `view` is what the timeline window actually renders.
     const board = $derived(appState.board);
+    const view = $derived(appState.visibleBoard);
 
     function onDragStart(task: Task) {
         dragging = task;
@@ -120,20 +124,178 @@
             appState.selectSession(task.session_id);
         }
     }
+
+    async function remove(task: Task) {
+        try {
+            await appState.trashTaskByID(task.id);
+        } catch (err) {
+            toast.error(
+                err instanceof Error ? err.message : "Couldn't trash the task",
+            );
+        }
+    }
+
+    async function toggleTrash() {
+        appState.showTrash = !appState.showTrash;
+        if (appState.showTrash) {
+            try {
+                await appState.refreshTrash();
+            } catch (err) {
+                toast.error(
+                    err instanceof Error ? err.message : "Couldn't load trash",
+                );
+            }
+        }
+    }
+
+    async function restore(task: Task) {
+        try {
+            await appState.restoreTaskByID(task.id);
+            toast.success(`Restored “${task.title}”`);
+        } catch (err) {
+            toast.error(
+                err instanceof Error ? err.message : "Couldn't restore the task",
+            );
+        }
+    }
+
+    async function purge(task: Task) {
+        try {
+            await appState.purgeTaskByID(task.id);
+        } catch (err) {
+            toast.error(
+                err instanceof Error ? err.message : "Couldn't delete the task",
+            );
+        }
+    }
+
+    const retentionDays = $derived(
+        appState.settings?.trash_retention_days ?? 7,
+    );
+
+    /** Whole days until a trashed task is purged; 0 means it goes today. */
+    function daysLeft(trashedAt: string | undefined): number {
+        if (!trashedAt) return retentionDays;
+        const expiry =
+            new Date(trashedAt).getTime() + retentionDays * 86_400_000;
+        return Math.max(0, Math.ceil((expiry - Date.now()) / 86_400_000));
+    }
 </script>
 
 <div class="board">
     <header class="board__bar">
-        <h1 class="board__title">Board</h1>
-        <button class="btn btn-primary" onclick={() => (showNew = true)}>
-            <Plus size={14} />
-            <span>New task</span>
-        </button>
+        <h1 class="board__title">{appState.showTrash ? "Trash" : "Board"}</h1>
+        <div class="board__actions">
+            {#if !appState.showTrash}
+                <div
+                    class="win"
+                    role="radiogroup"
+                    aria-label="Timeline window for finished tasks"
+                >
+                    {#each BOARD_WINDOWS as w (w.id)}
+                        <button
+                            class="win__opt"
+                            class:is-active={appState.boardWindow === w.id}
+                            role="radio"
+                            aria-checked={appState.boardWindow === w.id}
+                            onclick={() => appState.setBoardWindow(w.id)}
+                        >
+                            {w.label}
+                        </button>
+                    {/each}
+                </div>
+            {/if}
+            <button
+                class="btn btn-ghost btn-icon"
+                class:is-active={appState.showTrash}
+                title={appState.showTrash ? "Back to board" : "Trash"}
+                aria-label={appState.showTrash ? "Back to board" : "Trash"}
+                aria-pressed={appState.showTrash}
+                onclick={toggleTrash}
+            >
+                <Trash2 size={16} />
+            </button>
+            <button
+                class="btn btn-ghost btn-icon"
+                title="Settings"
+                aria-label="Settings"
+                onclick={() => appState.setView("settings")}
+            >
+                <Settings size={16} />
+            </button>
+            <button
+                class="btn btn-primary"
+                disabled={appState.showTrash}
+                onclick={() => (showNew = true)}
+            >
+                <Plus size={14} />
+                <span>New task</span>
+            </button>
+        </div>
     </header>
 
-    <div class="board__cols scroll-x">
-        {#each TASK_COLUMNS as column (column.id)}
-            {@const items = board[column.id]}
+    {#if appState.showTrash}
+        <div class="trash scroll-y">
+            {#if appState.trashedTasks.length === 0}
+                <p class="trash__empty">Trash is empty.</p>
+            {:else}
+                <ul class="trash__list">
+                    {#each appState.trashedTasks as task (task.id)}
+                        {@const left = daysLeft(task.trashed_at)}
+                        <li class="trash__row">
+                            <div class="trash__main">
+                                <p class="trash__title">{task.title}</p>
+                                <p class="trash__meta">
+                                    {#if task.repo_name}<span
+                                            >{task.repo_name}</span
+                                        >
+                                        ·{/if}
+                                    trashed {formatRelativeTime(
+                                        task.trashed_at ?? task.updated_at,
+                                    )} ·
+                                    <span
+                                        class="trash__left"
+                                        class:is-soon={left <= 1}
+                                    >
+                                        {left === 0
+                                            ? "purges today"
+                                            : left === 1
+                                              ? "1 day left"
+                                              : `${left} days left`}
+                                    </span>
+                                </p>
+                            </div>
+                            <div class="trash__actions">
+                                <button
+                                    class="btn btn-secondary btn-sm"
+                                    onclick={() => restore(task)}
+                                >
+                                    <RotateCcw size={12} />
+                                    <span>Restore</span>
+                                </button>
+                                <button
+                                    class="btn btn-ghost btn-sm trash__del"
+                                    onclick={() => purge(task)}
+                                >
+                                    Delete forever
+                                </button>
+                            </div>
+                        </li>
+                    {/each}
+                </ul>
+            {/if}
+        </div>
+
+        <p class="board__hint">
+            Trashed tasks keep their worktree and are recoverable for
+            <b>{retentionDays} {retentionDays === 1 ? "day" : "days"}</b>, then
+            their worktree and branch are reclaimed. Change this in
+            <b>Settings</b>.
+        </p>
+    {:else}
+        <div class="board__cols scroll-x">
+            {#each TASK_COLUMNS as column (column.id)}
+            {@const items = view[column.id]}
             <section
                 class="col"
                 class:is-over={overColumn === column.id}
@@ -165,6 +327,7 @@
                                 dragging={dragging?.id === task.id}
                                 onstart={start}
                                 onopen={open}
+                                ondelete={remove}
                                 ondragstart={onDragStart}
                                 ondragend={onDragEnd}
                             />
@@ -177,9 +340,20 @@
 
                     {#if items.length === 0 && overColumn !== column.id}
                         <p class="col__empty">
-                            {column.id === "todo"
-                                ? "Add a task to get started."
-                                : "Nothing here."}
+                            {#if column.id === "done" && appState.hiddenDoneCount > 0}
+                                Nothing in this window — {appState.hiddenDoneCount}
+                                finished earlier.
+                            {:else if column.id === "todo"}
+                                Add a task to get started.
+                            {:else}
+                                Nothing here.
+                            {/if}
+                        </p>
+                    {/if}
+
+                    {#if column.id === "done" && items.length > 0 && appState.hiddenDoneCount > 0}
+                        <p class="col__more">
+                            {appState.hiddenDoneCount} more finished before this window.
                         </p>
                     {/if}
                 </div>
@@ -187,12 +361,13 @@
         {/each}
     </div>
 
-    <p class="board__hint">
-        <b>In progress</b> runs the agent · <b>In review</b> runs a reviewer over
-        its worktree ·
-        <kbd class="kbd">⌥</kbd><kbd class="kbd">←</kbd
-        ><kbd class="kbd">→</kbd> moves a focused card
-    </p>
+        <p class="board__hint">
+            <b>In progress</b> runs the agent · <b>In review</b> runs a reviewer
+            over its worktree · <b>Done</b> ages out past the selected window ·
+            <kbd class="kbd">⌥</kbd><kbd class="kbd">←</kbd
+            ><kbd class="kbd">→</kbd> moves a focused card
+        </p>
+    {/if}
 </div>
 
 <NewTaskDialog bind:open={showNew} />
@@ -221,6 +396,53 @@
         font-size: var(--text-md);
         font-weight: 600;
         letter-spacing: var(--tracking-tight);
+    }
+
+    .board__actions {
+        display: flex;
+        align-items: center;
+        gap: var(--space-xs);
+    }
+
+    /* Timeline window: a compact segmented control. The active segment carries
+       the same accent "this one" signal used across the app. */
+    .win {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--space-3xs);
+        padding: var(--space-3xs);
+        background: var(--color-paper-2);
+        border: var(--rule-hair) solid var(--color-rule);
+        border-radius: var(--radius-lg);
+    }
+
+    .win__opt {
+        padding: var(--space-3xs) var(--space-xs);
+        background: none;
+        border: none;
+        border-radius: var(--radius-sm);
+        color: var(--color-ink-3);
+        font-size: var(--text-2xs);
+        font-weight: 600;
+        line-height: var(--leading-caps);
+        cursor: pointer;
+        transition:
+            color var(--dur-micro) var(--ease-out),
+            background-color var(--dur-micro) var(--ease-out);
+    }
+
+    .win__opt:hover {
+        color: var(--color-ink);
+    }
+
+    .win__opt:focus-visible {
+        outline: var(--rule-hair) solid var(--color-focus);
+        outline-offset: var(--rule-hair);
+    }
+
+    .win__opt.is-active {
+        background: var(--color-accent-wash);
+        color: var(--color-accent);
     }
 
     .board__cols {
@@ -284,6 +506,14 @@
 
     .col__empty {
         padding: var(--space-sm);
+        font-size: var(--text-2xs);
+        color: var(--color-ink-3);
+    }
+
+    /* Quiet footnote under Done when older cards have aged out of the window. */
+    .col__more {
+        margin-block-start: var(--space-2xs);
+        padding: var(--space-2xs) var(--space-sm);
         font-size: var(--text-2xs);
         color: var(--color-ink-3);
     }

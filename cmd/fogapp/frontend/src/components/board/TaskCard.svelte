@@ -2,13 +2,14 @@
     import type { Task } from "$lib/types";
     import { appState } from "$lib/stores.svelte";
     import { formatRelativeTime, openExternal } from "$lib/utils";
-    import { Play, GitBranch, ExternalLink } from "@lucide/svelte";
+    import { Play, GitBranch, ExternalLink, Trash2 } from "@lucide/svelte";
 
     let {
         task,
         dragging = false,
         onstart,
         onopen,
+        ondelete,
         ondragstart,
         ondragend,
     }: {
@@ -16,9 +17,30 @@
         dragging?: boolean;
         onstart: (task: Task) => void;
         onopen: (task: Task) => void;
+        ondelete: (task: Task) => void;
         ondragstart: (task: Task) => void;
         ondragend: () => void;
     } = $props();
+
+    // Deleting is destructive and a card is easy to click by accident, so the
+    // trash icon arms an inline confirm rather than firing straight away.
+    let confirming = $state(false);
+
+    function askDelete(e: MouseEvent) {
+        e.stopPropagation();
+        confirming = true;
+    }
+
+    function cancelDelete(e: MouseEvent) {
+        e.stopPropagation();
+        confirming = false;
+    }
+
+    function confirmDelete(e: MouseEvent) {
+        e.stopPropagation();
+        confirming = false;
+        ondelete(task);
+    }
 
     const session = $derived(
         task.session_id
@@ -60,6 +82,7 @@
     aria-roledescription="Draggable task"
     ondragstart={() => ondragstart(task)}
     ondragend={ondragend}
+    onmouseleave={() => (confirming = false)}
     onclick={() => onopen(task)}
     onkeydown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -111,6 +134,30 @@
         <button class="card__ext" onclick={openIssue} title="Open in tracker">
             <span class="mono">{task.external_key}</span>
             <ExternalLink size={10} />
+        </button>
+    {/if}
+
+    {#if confirming}
+        <div class="card__confirm" role="group" aria-label="Confirm delete">
+            <span class="card__confirm-q">Delete?</span>
+            <button class="card__confirm-btn" onclick={cancelDelete}>
+                Cancel
+            </button>
+            <button
+                class="card__confirm-btn is-danger"
+                onclick={confirmDelete}
+            >
+                Delete
+            </button>
+        </div>
+    {:else}
+        <button
+            class="card__del"
+            onclick={askDelete}
+            title="Delete task"
+            aria-label="Delete task"
+        >
+            <Trash2 size={12} />
         </button>
     {/if}
 </div>
@@ -214,6 +261,88 @@
     }
 
     .card__ext:focus-visible {
+        outline: 2px solid var(--color-focus);
+        outline-offset: 1px;
+    }
+
+    /* Delete affordance: a quiet trash glyph, top-right, that only surfaces on
+       hover or keyboard focus so resting cards stay clean. */
+    .card__del {
+        position: absolute;
+        inset-block-start: var(--space-2xs);
+        inset-inline-end: var(--space-2xs);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--space-3xs);
+        background: var(--color-paper-3);
+        border: none;
+        border-radius: var(--radius-sm);
+        color: var(--color-ink-3);
+        opacity: 0;
+        cursor: pointer;
+        transition:
+            opacity var(--dur-micro) var(--ease-out),
+            color var(--dur-micro) var(--ease-out);
+    }
+
+    .card:hover .card__del,
+    .card:focus-within .card__del {
+        opacity: 1;
+    }
+
+    .card__del:hover {
+        color: var(--color-signal-del);
+    }
+
+    .card__del:focus-visible {
+        opacity: 1;
+        outline: 2px solid var(--color-focus);
+        outline-offset: 1px;
+    }
+
+    /* Armed confirm: sits where the trash icon was, on an opaque chip so the
+       choice reads clearly over the card's title. */
+    .card__confirm {
+        position: absolute;
+        inset-block-start: var(--space-2xs);
+        inset-inline-end: var(--space-2xs);
+        display: flex;
+        align-items: center;
+        gap: var(--space-3xs);
+        padding: var(--space-3xs);
+        background: var(--color-paper-4);
+        border: var(--rule-hair) solid var(--color-rule-2);
+        border-radius: var(--radius-sm);
+    }
+
+    .card__confirm-q {
+        padding-inline: var(--space-3xs);
+        font-size: var(--text-2xs);
+        color: var(--color-ink-2);
+    }
+
+    .card__confirm-btn {
+        padding: var(--space-3xs) var(--space-2xs);
+        background: none;
+        border: none;
+        border-radius: var(--radius-sm);
+        color: var(--color-ink-3);
+        font-size: var(--text-2xs);
+        font-weight: 600;
+        cursor: pointer;
+        transition: color var(--dur-micro) var(--ease-out);
+    }
+
+    .card__confirm-btn:hover {
+        color: var(--color-ink);
+    }
+
+    .card__confirm-btn.is-danger:hover {
+        color: var(--color-signal-del);
+    }
+
+    .card__confirm-btn:focus-visible {
         outline: 2px solid var(--color-focus);
         outline-offset: 1px;
     }

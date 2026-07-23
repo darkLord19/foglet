@@ -309,10 +309,36 @@ export async function updateTask(
     );
 }
 
+/**
+ * Move a task to trash. This stops any active session on the task but keeps its
+ * worktree, so the task stays recoverable until retention expires. Use
+ * `purgeTask` to delete permanently now.
+ */
 export async function deleteTask(taskID: string): Promise<void> {
     await fetchJSON<null>("/api/tasks/" + encodeURIComponent(taskID), {
         method: "DELETE",
     });
+}
+
+/** List trashed tasks, most-recently-trashed first. */
+export async function fetchTrashedTasks(): Promise<Task[]> {
+    return fetchJSON<Task[]>("/api/tasks/trash");
+}
+
+/** Restore a trashed task back onto the board. */
+export async function restoreTask(taskID: string): Promise<TaskResponse> {
+    return fetchJSON<TaskResponse>(
+        "/api/tasks/" + encodeURIComponent(taskID) + "/restore",
+        { method: "POST" },
+    );
+}
+
+/** Permanently delete a trashed task now, reclaiming its worktree and branch. */
+export async function purgeTask(taskID: string): Promise<void> {
+    await fetchJSON<null>(
+        "/api/tasks/" + encodeURIComponent(taskID) + "/purge",
+        { method: "POST" },
+    );
 }
 
 /**

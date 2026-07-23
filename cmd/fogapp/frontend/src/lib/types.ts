@@ -60,6 +60,7 @@ export interface Settings {
     default_notify: boolean;
     keep_awake: boolean;
     branch_prefix?: string;
+    trash_retention_days: number;
     gh_installed: boolean;
     gh_authenticated: boolean;
     onboarding_required: boolean;
@@ -74,6 +75,7 @@ export interface UpdateSettingsPayload {
     default_notify?: boolean;
     keep_awake?: boolean;
     branch_prefix?: string;
+    trash_retention_days?: number;
 }
 
 export interface Repo {
@@ -186,6 +188,8 @@ export interface Task {
     synced_at?: string;
     created_at: string;
     updated_at: string;
+    /** Set when the task is in trash; recoverable until retention expires. */
+    trashed_at?: string;
 }
 
 export interface TaskResponse {
@@ -220,6 +224,20 @@ export const TASK_COLUMNS: { id: TaskStatus; label: string }[] = [
     { id: "in_progress", label: "In progress" },
     { id: "in_review", label: "In review" },
     { id: "done", label: "Done" },
+];
+
+// ── Board timeline filter ──
+//
+// The board reads as a timeline: live work (todo / in progress / in review) is
+// always shown, while finished cards age out of the Done column once they fall
+// outside the selected window. `days: null` means "all time" (no cutoff).
+export type BoardWindow = "today" | "week" | "month" | "all";
+
+export const BOARD_WINDOWS: { id: BoardWindow; label: string; days: number | null }[] = [
+    { id: "today", label: "Today", days: 0 },
+    { id: "week", label: "7d", days: 7 },
+    { id: "month", label: "30d", days: 30 },
+    { id: "all", label: "All", days: null },
 ];
 
 // ── Tracker sync ──
