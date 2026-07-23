@@ -121,6 +121,22 @@ func (g *Git) BranchExists(branch string) bool {
 	return err == nil
 }
 
+// DeleteBranch removes a local branch. With force it uses -D, discarding the
+// unmerged-commits safety check — required when tearing down a session whose
+// work was never merged. Deleting a branch still checked out in a worktree
+// fails, so remove the worktree first.
+func (g *Git) DeleteBranch(branch string, force bool) error {
+	if strings.TrimSpace(branch) == "" {
+		return nil
+	}
+	flag := "-d"
+	if force {
+		flag = "-D"
+	}
+	_, err := g.exec("branch", flag, branch)
+	return err
+}
+
 // ListBranches returns a list of local branches.
 func (g *Git) ListBranches() ([]string, error) {
 	out, err := g.exec("branch", "--list", "--format=%(refname:short)")

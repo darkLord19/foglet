@@ -169,6 +169,7 @@ func (s *Store) init() error {
 				synced_at TEXT,
 				created_at TEXT NOT NULL,
 				updated_at TEXT NOT NULL,
+				trashed_at TEXT,
 				FOREIGN KEY(repo_name) REFERENCES repos(name),
 				FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE SET NULL
 			);`,
@@ -200,6 +201,9 @@ func (s *Store) init() error {
 		}
 	}
 	if err := s.ensureRunsSchema(); err != nil {
+		return err
+	}
+	if err := s.ensureTasksSchema(); err != nil {
 		return err
 	}
 
@@ -526,6 +530,20 @@ func (s *Store) ensureRunsSchema() error {
 	} else if !hasWorktree {
 		if _, err := s.db.Exec(`ALTER TABLE runs ADD COLUMN worktree_path TEXT`); err != nil {
 			return fmt.Errorf("add runs.worktree_path column: %w", err)
+		}
+	}
+	return nil
+}
+
+// ensureTasksSchema backfills the trashed_at column on databases created before
+// trash support existed. New databases already have it from the CREATE TABLE.
+func (s *Store) ensureTasksSchema() error {
+	const table = "tasks"
+	if hasTrashed, err := s.tableColumnExists(table, "trashed_at"); err != nil {
+		return err
+	} else if !hasTrashed {
+		if _, err := s.db.Exec(`ALTER TABLE tasks ADD COLUMN trashed_at TEXT`); err != nil {
+			return fmt.Errorf("add tasks.trashed_at column: %w", err)
 		}
 	}
 	return nil

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -103,6 +104,12 @@ func (s *Server) handleTaskDetail(w http.ResponseWriter, r *http.Request) {
 			return
 		case "start":
 			s.startTask(w, id)
+			return
+		case "restore":
+			s.restoreTask(w, id)
+			return
+		case "purge":
+			s.purgeTask(w, id)
 			return
 		}
 	}
@@ -224,12 +231,90 @@ func (s *Server) updateTask(w http.ResponseWriter, r *http.Request, id string) {
 	s.writeJSON(w, http.StatusOK, TaskResponse{Task: updated})
 }
 
+// deleteTask moves a task to trash rather than destroying it. If the linked
+// session still has an active run, that run is stopped — trashing a card should
+// not leave an agent working on discarded intent. The worktree is deliberately
+// kept: the task stays recoverable until retention expires (see the trash
+// janitor), at which point the worktree and branch are reclaimed.
 func (s *Server) deleteTask(w http.ResponseWriter, id string) {
+	current, err := s.stateStore.GetTask(id)
+	if err != nil {
+		s.writeTaskErr(w, err)
+		return
+	}
+
+	s.stopSessionBestEffort(current.SessionID)
+
+	if err := s.stateStore.TrashTask(id); err != nil {
+		s.writeTaskErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// restoreTask brings a trashed task back onto the board.
+func (s *Server) restoreTask(w http.ResponseWriter, id string) {
+	if err := s.stateStore.RestoreTask(id); err != nil {
+		s.writeTaskErr(w, err)
+		return
+	}
+	task, err := s.stateStore.GetTask(id)
+	if err != nil {
+		s.writeTaskErr(w, err)
+		return
+	}
+	s.writeJSON(w, http.StatusOK, TaskResponse{Task: task})
+}
+
+// purgeTask permanently deletes a trashed task now, without waiting for
+// retention, reclaiming its session's worktree and branch first. This is the
+// "delete forever" affordance in the trash view.
+func (s *Server) purgeTask(w http.ResponseWriter, id string) {
+	current, err := s.stateStore.GetTask(id)
+	if err != nil {
+		s.writeTaskErr(w, err)
+		return
+	}
+
+	s.stopSessionBestEffort(current.SessionID)
+	if current.SessionID != "" {
+		if err := s.runner.RemoveSessionArtifacts(current.SessionID); err != nil {
+			log.Printf("purge task %s: %v", id, err)
+		}
+	}
+
 	if err := s.stateStore.DeleteTask(id); err != nil {
 		s.writeTaskErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleTasksTrash lists trashed tasks for the trash view.
+func (s *Server) handleTasksTrash(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErr(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	tasks, err := s.stateStore.ListTrashedTasks()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.writeJSON(w, http.StatusOK, tasks)
+}
+
+// stopSessionBestEffort cancels a session's active run if one exists. A session
+// with nothing running (already finished, or never started) is not an error —
+// there is simply nothing to stop.
+func (s *Server) stopSessionBestEffort(sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	if _, err := s.runner.CancelSessionLatestRun(sessionID); err != nil {
+		// The common case: the session had no active run to cancel.
+		log.Printf("stop session %s on trash: %v", sessionID, err)
+	}
 }
 
 // moveTask repositions a card and, when the move warrants it, launches the

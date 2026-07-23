@@ -3,6 +3,7 @@ package state
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 func newTaskStore(t *testing.T) *Store {
@@ -38,6 +39,78 @@ func columnIDs(t *testing.T, s *Store, status string) []string {
 		}
 	}
 	return ids
+}
+
+func TestTrashRestoreAndPurge(t *testing.T) {
+	s := newTaskStore(t)
+	mustCreateTask(t, s, "t1", "keep", "todo")
+	mustCreateTask(t, s, "t2", "toss", "done")
+
+	// Trashing drops it from the board but not from the database.
+	if err := s.TrashTask("t2"); err != nil {
+		t.Fatalf("TrashTask: %v", err)
+	}
+	if ids := columnIDs(t, s, "done"); len(ids) != 0 {
+		t.Errorf("done column after trash = %v, want empty", ids)
+	}
+	trashed, err := s.ListTrashedTasks()
+	if err != nil {
+		t.Fatalf("ListTrashedTasks: %v", err)
+	}
+	if len(trashed) != 1 || trashed[0].ID != "t2" || trashed[0].TrashedAt == nil {
+		t.Fatalf("ListTrashedTasks = %+v, want t2 with TrashedAt set", trashed)
+	}
+
+	// A live task is still reachable by id; a trashed one still is too.
+	if got, err := s.GetTask("t2"); err != nil || got.TrashedAt == nil {
+		t.Fatalf("GetTask(t2) = %+v, err %v; want trashed", got, err)
+	}
+
+	// Restore returns it to its original column.
+	if err := s.RestoreTask("t2"); err != nil {
+		t.Fatalf("RestoreTask: %v", err)
+	}
+	if ids := columnIDs(t, s, "done"); len(ids) != 1 || ids[0] != "t2" {
+		t.Errorf("done column after restore = %v, want [t2]", ids)
+	}
+
+	// Purge is a hard delete.
+	if err := s.DeleteTask("t2"); err != nil {
+		t.Fatalf("DeleteTask: %v", err)
+	}
+	if _, err := s.GetTask("t2"); !errors.Is(err, ErrTaskNotFound) {
+		t.Errorf("GetTask after delete: err %v, want ErrTaskNotFound", err)
+	}
+}
+
+func TestListTrashedBefore(t *testing.T) {
+	s := newTaskStore(t)
+	mustCreateTask(t, s, "old", "old", "todo")
+	mustCreateTask(t, s, "new", "new", "todo")
+	if err := s.TrashTask("old"); err != nil {
+		t.Fatalf("TrashTask(old): %v", err)
+	}
+	if err := s.TrashTask("new"); err != nil {
+		t.Fatalf("TrashTask(new): %v", err)
+	}
+
+	// Backdate one trashed_at so it falls before the cutoff.
+	if _, err := s.db.Exec(
+		`UPDATE tasks SET trashed_at = ? WHERE id = ?`,
+		"2000-01-01T00:00:00Z", "old",
+	); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+
+	// Cutoff sits between the backdated "old" and the just-trashed "new".
+	cutoff := time.Date(2010, 1, 1, 0, 0, 0, 0, time.UTC)
+	expired, err := s.ListTrashedBefore(cutoff)
+	if err != nil {
+		t.Fatalf("ListTrashedBefore: %v", err)
+	}
+	if len(expired) != 1 || expired[0].ID != "old" {
+		t.Fatalf("ListTrashedBefore = %+v, want [old]", expired)
+	}
 }
 
 func TestCreateTaskValidation(t *testing.T) {

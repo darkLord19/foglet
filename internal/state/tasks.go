@@ -37,6 +37,11 @@ type Task struct {
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+
+	// TrashedAt is set when the card is moved to trash. Trashed tasks drop off
+	// the board but survive — worktree and all — until retention expires and
+	// they are purged. Nil for live tasks.
+	TrashedAt *time.Time `json:"trashed_at,omitempty"`
 }
 
 // ErrNotFound is the package's single not-found signal.
@@ -58,9 +63,15 @@ var ErrTaskNotFound = fmt.Errorf("%w: task", ErrNotFound)
 // wide initial gap keeps float precision comfortable across many reorders.
 const positionGap = 1024.0
 
+// taskColumns is the insert/base column list. New tasks are never born trashed,
+// so trashed_at is omitted here and left to its NULL default.
 const taskColumns = `id, title, body, status, position, repo_name, tool, model,
 	base_branch, session_id, provider, external_id, external_key, external_url,
 	external_status, synced_at, created_at, updated_at`
+
+// taskSelectColumns adds trashed_at, which every read needs so scanTask can tell
+// live cards from trashed ones.
+const taskSelectColumns = taskColumns + `, trashed_at`
 
 // CreateTask inserts a task, placing it at the end of its column when no
 // position is supplied.
@@ -117,10 +128,10 @@ func (s *Store) CreateTask(t Task) (Task, error) {
 	return t, nil
 }
 
-// ListTasks returns every task ordered by column then position, which is the
-// order the board renders.
+// ListTasks returns every live (non-trashed) task ordered by column then
+// position, which is the order the board renders.
 func (s *Store) ListTasks() ([]Task, error) {
-	rows, err := s.db.Query(`SELECT ` + taskColumns + ` FROM tasks ORDER BY status, position`)
+	rows, err := s.db.Query(`SELECT ` + taskSelectColumns + ` FROM tasks WHERE trashed_at IS NULL ORDER BY status, position`)
 	if err != nil {
 		return nil, fmt.Errorf("list tasks: %w", err)
 	}
@@ -139,7 +150,7 @@ func (s *Store) ListTasks() ([]Task, error) {
 
 // GetTask fetches one task by id.
 func (s *Store) GetTask(id string) (Task, error) {
-	row := s.db.QueryRow(`SELECT `+taskColumns+` FROM tasks WHERE id = ?`, strings.TrimSpace(id))
+	row := s.db.QueryRow(`SELECT `+taskSelectColumns+` FROM tasks WHERE id = ?`, strings.TrimSpace(id))
 	t, err := scanTask(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Task{}, ErrTaskNotFound
@@ -208,8 +219,80 @@ func (s *Store) LinkTaskSession(taskID, sessionID string) error {
 	return requireOneRow(res, ErrTaskNotFound)
 }
 
-// DeleteTask removes a task. The linked session, if any, is left alone: the
-// agent's work outlives the card that requested it.
+// TrashTask soft-deletes a task: it drops off the board but stays recoverable,
+// worktree and all, until retention expires. A no-op timestamp change on an
+// already-trashed task is harmless.
+func (s *Store) TrashTask(id string) error {
+	res, err := s.db.Exec(
+		`UPDATE tasks SET trashed_at = ?, updated_at = ? WHERE id = ?`,
+		nowRFC3339Nano(), nowRFC3339Nano(), strings.TrimSpace(id),
+	)
+	if err != nil {
+		return fmt.Errorf("trash task: %w", err)
+	}
+	return requireOneRow(res, ErrTaskNotFound)
+}
+
+// RestoreTask brings a trashed task back onto the board. Its old status and
+// position are untouched, so it returns to where it was.
+func (s *Store) RestoreTask(id string) error {
+	res, err := s.db.Exec(
+		`UPDATE tasks SET trashed_at = NULL, updated_at = ? WHERE id = ?`,
+		nowRFC3339Nano(), strings.TrimSpace(id),
+	)
+	if err != nil {
+		return fmt.Errorf("restore task: %w", err)
+	}
+	return requireOneRow(res, ErrTaskNotFound)
+}
+
+// ListTrashedTasks returns trashed tasks, most-recently-trashed first.
+func (s *Store) ListTrashedTasks() ([]Task, error) {
+	rows, err := s.db.Query(
+		`SELECT ` + taskSelectColumns + ` FROM tasks WHERE trashed_at IS NOT NULL ORDER BY trashed_at DESC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list trashed tasks: %w", err)
+	}
+	defer rows.Close()
+
+	tasks := make([]Task, 0, 16)
+	for rows.Next() {
+		t, err := scanTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks, rows.Err()
+}
+
+// ListTrashedBefore returns trashed tasks whose trashed_at predates cutoff — the
+// ones a retention pass should purge.
+func (s *Store) ListTrashedBefore(cutoff time.Time) ([]Task, error) {
+	rows, err := s.db.Query(
+		`SELECT `+taskSelectColumns+` FROM tasks WHERE trashed_at IS NOT NULL AND trashed_at < ? ORDER BY trashed_at`,
+		cutoff.UTC().Format(time.RFC3339Nano),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list trashed before: %w", err)
+	}
+	defer rows.Close()
+
+	tasks := make([]Task, 0, 16)
+	for rows.Next() {
+		t, err := scanTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, t)
+	}
+	return tasks, rows.Err()
+}
+
+// DeleteTask permanently removes a task row. The linked session's worktree and
+// branch are the caller's responsibility (see runner.RemoveSessionArtifacts) —
+// this only drops the card.
 func (s *Store) DeleteTask(id string) error {
 	res, err := s.db.Exec(`DELETE FROM tasks WHERE id = ?`, strings.TrimSpace(id))
 	if err != nil {
@@ -221,7 +304,7 @@ func (s *Store) DeleteTask(id string) error {
 // GetTaskByExternal finds the task mirroring a given upstream issue.
 func (s *Store) GetTaskByExternal(provider, externalID string) (Task, error) {
 	row := s.db.QueryRow(
-		`SELECT `+taskColumns+` FROM tasks WHERE provider = ? AND external_id = ?`,
+		`SELECT `+taskSelectColumns+` FROM tasks WHERE provider = ? AND external_id = ?`,
 		strings.TrimSpace(provider), strings.TrimSpace(externalID),
 	)
 	t, err := scanTask(row)
@@ -313,14 +396,14 @@ func scanTask(sc rowScanner) (Task, error) {
 		t                                          Task
 		body, repoName, tool, model, baseBranch    sql.NullString
 		sessionID, extID, extKey, extURL, extState sql.NullString
-		syncedAt                                   sql.NullString
+		syncedAt, trashedAt                        sql.NullString
 		createdRaw, updatedRaw                     string
 	)
 
 	err := sc.Scan(
 		&t.ID, &t.Title, &body, &t.Status, &t.Position, &repoName, &tool, &model,
 		&baseBranch, &sessionID, &t.Provider, &extID, &extKey, &extURL,
-		&extState, &syncedAt, &createdRaw, &updatedRaw,
+		&extState, &syncedAt, &createdRaw, &updatedRaw, &trashedAt,
 	)
 	if err != nil {
 		return Task{}, err
@@ -343,6 +426,14 @@ func scanTask(sc rowScanner) (Task, error) {
 			return Task{}, fmt.Errorf("parse task synced_at: %w", err)
 		}
 		t.SyncedAt = &parsed
+	}
+
+	if trashedAt.Valid {
+		parsed, err := time.Parse(time.RFC3339Nano, trashedAt.String)
+		if err != nil {
+			return Task{}, fmt.Errorf("parse task trashed_at: %w", err)
+		}
+		t.TrashedAt = &parsed
 	}
 
 	t.CreatedAt, err = time.Parse(time.RFC3339Nano, createdRaw)

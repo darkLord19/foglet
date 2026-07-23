@@ -45,6 +45,9 @@ func Build(ctx context.Context, opts BuildOpts) (*App, error) {
 	mux := http.NewServeMux()
 	apiServer.RegisterRoutes(mux)
 
+	// Sweep expired trash now and on an interval, tied to the app context.
+	apiServer.StartTrashJanitor(ctx)
+
 	// 5. Generate API token and write to file (for desktop UI)
 	apiToken, err := api.GenerateAPIToken()
 	if err != nil {

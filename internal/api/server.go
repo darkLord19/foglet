@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +38,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/sessions", s.handleSessions)
 	mux.HandleFunc("/api/sessions/", s.handleSessionDetail)
 	mux.HandleFunc("/api/tasks", s.handleTasks)
+	mux.HandleFunc("/api/tasks/trash", s.handleTasksTrash)
 	mux.HandleFunc("/api/tasks/", s.handleTaskDetail)
 	mux.HandleFunc("/api/tracker", s.handleTracker)
 	mux.HandleFunc("/api/tracker/sync", s.handleTrackerSync)
@@ -79,6 +81,7 @@ type SettingsResponse struct {
 	DefaultNotify      bool              `json:"default_notify"`
 	KeepAwake          bool              `json:"keep_awake"`
 	BranchPrefix       string            `json:"branch_prefix,omitempty"`
+	TrashRetentionDays int               `json:"trash_retention_days"`
 	GhInstalled        bool              `json:"gh_installed"`
 	GhAuthenticated    bool              `json:"gh_authenticated"`
 	OnboardingRequired bool              `json:"onboarding_required"`
@@ -93,6 +96,9 @@ type UpdateSettingsRequest struct {
 	DefaultNotify *bool             `json:"default_notify"`
 	KeepAwake     *bool             `json:"keep_awake,omitempty"`
 	BranchPrefix  *string           `json:"branch_prefix"`
+	// TrashRetentionDays is how long trashed tasks stay recoverable. Must be
+	// at least 1; there is no "keep forever" — trash is temporary by design.
+	TrashRetentionDays *int `json:"trash_retention_days,omitempty"`
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
@@ -134,6 +140,8 @@ func (s *Server) getSettings(w http.ResponseWriter) {
 	if prefix, found, err := s.stateStore.GetSetting("branch_prefix"); err == nil && found {
 		resp.BranchPrefix = prefix
 	}
+
+	resp.TrashRetentionDays = s.trashRetentionDays()
 
 	resp.GhInstalled = ghcli.IsGhAvailable()
 	if resp.GhInstalled {
@@ -226,6 +234,17 @@ func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.stateStore.SetSetting("branch_prefix", prefix); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if req.TrashRetentionDays != nil {
+		if *req.TrashRetentionDays < 1 {
+			http.Error(w, "trash_retention_days must be at least 1", http.StatusBadRequest)
+			return
+		}
+		if err := s.stateStore.SetSetting(settingTrashRetentionDays, strconv.Itoa(*req.TrashRetentionDays)); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

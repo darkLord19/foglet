@@ -38,6 +38,36 @@ func createTaskViaAPI(t *testing.T, srv *Server, req CreateTaskRequest) state.Ta
 	return resp.Task
 }
 
+func listTasksViaAPI(t *testing.T, srv *Server) []state.Task {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/api/tasks", nil)
+	w := httptest.NewRecorder()
+	srv.handleTasks(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list tasks: status %d body=%s", w.Code, w.Body.String())
+	}
+	var tasks []state.Task
+	if err := json.NewDecoder(w.Body).Decode(&tasks); err != nil {
+		t.Fatalf("decode list tasks: %v", err)
+	}
+	return tasks
+}
+
+func listTrashedViaAPI(t *testing.T, srv *Server) []state.Task {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, "/api/tasks/trash", nil)
+	w := httptest.NewRecorder()
+	srv.handleTasksTrash(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list trashed: status %d body=%s", w.Code, w.Body.String())
+	}
+	var tasks []state.Task
+	if err := json.NewDecoder(w.Body).Decode(&tasks); err != nil {
+		t.Fatalf("decode list trashed: %v", err)
+	}
+	return tasks
+}
+
 func TestCreateTaskRequiresTitle(t *testing.T) {
 	srv := newTestServer(t)
 
@@ -245,7 +275,7 @@ func TestTaskDetailMethods(t *testing.T) {
 		t.Errorf("Title = %q, want Renamed", got.Title)
 	}
 
-	// DELETE
+	// DELETE trashes rather than destroying.
 	req = httptest.NewRequest(http.MethodDelete, path, nil)
 	w = httptest.NewRecorder()
 	srv.handleTaskDetail(w, req)
@@ -253,12 +283,48 @@ func TestTaskDetailMethods(t *testing.T) {
 		t.Errorf("delete: status %d, want 204", w.Code)
 	}
 
-	// Gone
+	// Off the board, but present in trash and recoverable.
+	if tasks := listTasksViaAPI(t, srv); len(tasks) != 0 {
+		t.Errorf("board after trash = %d tasks, want 0", len(tasks))
+	}
+	if trashed := listTrashedViaAPI(t, srv); len(trashed) != 1 || trashed[0].ID != created.ID {
+		t.Errorf("trash after delete = %+v, want the one task", trashed)
+	}
+
+	// Restore puts it back on the board.
+	req = httptest.NewRequest(http.MethodPost, path+"/restore", nil)
+	w = httptest.NewRecorder()
+	srv.handleTaskDetail(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("restore: status %d body=%s", w.Code, w.Body.String())
+	}
+	if tasks := listTasksViaAPI(t, srv); len(tasks) != 1 {
+		t.Errorf("board after restore = %d tasks, want 1", len(tasks))
+	}
+
+	// Trash again, then purge for good.
+	req = httptest.NewRequest(http.MethodDelete, path, nil)
+	w = httptest.NewRecorder()
+	srv.handleTaskDetail(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("re-delete: status %d", w.Code)
+	}
+	req = httptest.NewRequest(http.MethodPost, path+"/purge", nil)
+	w = httptest.NewRecorder()
+	srv.handleTaskDetail(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("purge: status %d body=%s", w.Code, w.Body.String())
+	}
+
+	// Gone for good.
 	req = httptest.NewRequest(http.MethodGet, path, nil)
 	w = httptest.NewRecorder()
 	srv.handleTaskDetail(w, req)
 	if w.Code != http.StatusNotFound {
-		t.Errorf("get after delete: status %d, want 404", w.Code)
+		t.Errorf("get after purge: status %d, want 404", w.Code)
+	}
+	if trashed := listTrashedViaAPI(t, srv); len(trashed) != 0 {
+		t.Errorf("trash after purge = %d, want 0", len(trashed))
 	}
 }
 
