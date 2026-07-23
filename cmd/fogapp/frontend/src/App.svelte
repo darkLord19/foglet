@@ -2,7 +2,6 @@
   import { onMount, onDestroy } from "svelte";
   import { Toaster } from "svelte-sonner";
   import { appState } from "$lib/stores.svelte";
-  import Sidebar from "./components/Sidebar.svelte";
   import BoardView from "./components/BoardView.svelte";
   import HomeView from "./components/HomeView.svelte";
   import SessionDetail from "./components/SessionDetail.svelte";
@@ -50,7 +49,6 @@
   <Onboarding />
 {:else}
   <div class="shell">
-    <Sidebar />
     <main class="shell__main">
       {#if appState.currentView === "board"}
         <BoardView />
