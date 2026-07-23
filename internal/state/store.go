@@ -184,6 +184,16 @@ func (s *Store) init() error {
 			WHERE external_id IS NOT NULL;`,
 	}
 
+	// An intermediate refactor shipped a differently-shaped `tasks` table
+	// (per-run execution rows keyed by repo_id/state/prompt). The current
+	// Kanban schema reuses the name with CREATE TABLE IF NOT EXISTS, which is
+	// a no-op against that legacy table, so the CREATE INDEX below would then
+	// fail on the missing `status` column. Drop the incompatible table first
+	// so the create statements recreate it in its current shape.
+	if err := s.dropLegacyTasksTable(); err != nil {
+		return err
+	}
+
 	for _, stmt := range stmts {
 		if _, err := s.db.Exec(stmt); err != nil {
 			return fmt.Errorf("init schema: %w", err)
@@ -462,6 +472,51 @@ func (s *Store) GetRepoByName(name string) (Repo, bool, error) {
 
 func nowRFC3339Nano() string {
 	return time.Now().UTC().Format(time.RFC3339Nano)
+}
+
+// dropLegacyTasksTable removes a pre-existing `tasks` table left over from an
+// earlier schema whenever it lacks the current `status` column. The legacy and
+// current tables share nothing but the name, so there is no data worth
+// migrating; dropping lets init() recreate the table in its Kanban shape.
+func (s *Store) dropLegacyTasksTable() error {
+	exists, err := s.tableExists("tasks")
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+	hasStatus, err := s.tableColumnExists("tasks", "status")
+	if err != nil {
+		return err
+	}
+	if hasStatus {
+		return nil
+	}
+	if _, err := s.db.Exec(`DROP TABLE tasks`); err != nil {
+		return fmt.Errorf("drop legacy tasks table: %w", err)
+	}
+	return nil
+}
+
+// tableExists reports whether a table of the given name exists.
+func (s *Store) tableExists(tableName string) (bool, error) {
+	tableName = strings.TrimSpace(tableName)
+	if tableName == "" {
+		return false, errors.New("table name is required")
+	}
+	var name string
+	err := s.db.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
+		tableName,
+	).Scan(&name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("check table %s exists: %w", tableName, err)
+	}
+	return true, nil
 }
 
 func (s *Store) ensureRunsSchema() error {

@@ -246,3 +246,50 @@ func newTestStore(t *testing.T) *Store {
 	}
 	return store
 }
+
+// TestStoreInitMigratesLegacyTasksTable reproduces the panic seen when an
+// on-disk database still holds the pre-Kanban `tasks` table: init() must drop
+// the incompatible table and recreate it rather than failing to build the
+// status index.
+func TestStoreInitMigratesLegacyTasksTable(t *testing.T) {
+	home := t.TempDir()
+
+	store, err := NewStore(home)
+	if err != nil {
+		t.Fatalf("new store failed: %v", err)
+	}
+
+	// Replace the current tasks table with the legacy shape (no status column).
+	if _, err := store.db.Exec(`DROP TABLE tasks`); err != nil {
+		t.Fatalf("drop tasks failed: %v", err)
+	}
+	if _, err := store.db.Exec(`CREATE TABLE tasks (
+		id TEXT PRIMARY KEY,
+		repo_id INTEGER NOT NULL,
+		state TEXT NOT NULL,
+		prompt TEXT NOT NULL,
+		branch TEXT NOT NULL,
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL
+	)`); err != nil {
+		t.Fatalf("create legacy tasks failed: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close store failed: %v", err)
+	}
+
+	// Re-opening runs init() again against the legacy table on disk.
+	store, err = NewStore(home)
+	if err != nil {
+		t.Fatalf("reopen store failed: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	hasStatus, err := store.tableColumnExists("tasks", "status")
+	if err != nil {
+		t.Fatalf("column check failed: %v", err)
+	}
+	if !hasStatus {
+		t.Fatal("expected tasks table to be recreated with a status column")
+	}
+}
