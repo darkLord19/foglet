@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	runpkg "github.com/darkLord19/foglet/internal/run"
 	"github.com/darkLord19/foglet/internal/state"
 	"github.com/darkLord19/foglet/internal/util"
 )
@@ -69,11 +70,11 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 	}()
 
 	fail := func(phase string, err error) error {
-		terminalState := "FAILED"
+		terminalState := runpkg.StateFailed.String()
 		eventType := "error"
 		message := phase + ": " + err.Error()
 		if isCanceledError(err) {
-			terminalState = "CANCELLED"
+			terminalState = runpkg.StateCancelled.String()
 			eventType = "cancelled"
 			message = phase + ": canceled"
 		}
@@ -97,7 +98,7 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 	}
 
 	if opts.SetupCmd != "" {
-		if err := r.setRunPhase(session.ID, run.ID, "SETUP"); err != nil {
+		if err := r.setRunPhase(session.ID, run.ID, runpkg.StateSetup.String()); err != nil {
 			return err
 		}
 		_ = r.runs.AppendRunEvent(state.RunEvent{
@@ -110,7 +111,7 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 		}
 	}
 
-	if err := r.setRunPhase(session.ID, run.ID, "AI_RUNNING"); err != nil {
+	if err := r.setRunPhase(session.ID, run.ID, runpkg.StateAIRunning.String()); err != nil {
 		return err
 	}
 	_ = r.runs.AppendRunEvent(state.RunEvent{
@@ -156,7 +157,7 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 	}
 
 	if opts.Validate && opts.ValidateCmd != "" {
-		if err := r.setRunPhase(session.ID, run.ID, "VALIDATING"); err != nil {
+		if err := r.setRunPhase(session.ID, run.ID, runpkg.StateValidating.String()); err != nil {
 			return err
 		}
 		if err := r.runShell(ctx, run.WorktreePath, opts.ValidateCmd); err != nil {
@@ -164,7 +165,7 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 		}
 	}
 
-	if err := r.setRunPhase(session.ID, run.ID, "COMMITTED"); err != nil {
+	if err := r.setRunPhase(session.ID, run.ID, runpkg.StateCommitted.String()); err != nil {
 		return err
 	}
 
@@ -208,10 +209,10 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 		}
 	}
 
-	if err := r.runs.CompleteRun(run.ID, "COMPLETED", commitSHA, commitMsg, ""); err != nil {
+	if err := r.runs.CompleteRun(run.ID, runpkg.StateCompleted.String(), commitSHA, commitMsg, ""); err != nil {
 		return err
 	}
-	if err := r.updateSessionStatusIfLatest(session.ID, run.ID, "COMPLETED"); err != nil {
+	if err := r.updateSessionStatusIfLatest(session.ID, run.ID, runpkg.StateCompleted.String()); err != nil {
 		return err
 	}
 	_ = r.runs.AppendRunEvent(state.RunEvent{

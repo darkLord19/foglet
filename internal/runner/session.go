@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	runpkg "github.com/darkLord19/foglet/internal/run"
 	"github.com/darkLord19/foglet/internal/state"
 	"github.com/google/uuid"
 )
@@ -38,15 +39,22 @@ func (r *Runner) StartSession(opts StartSessionOptions) (state.Session, state.Ru
 	return r.loadSessionAndRun(session.ID, run.ID, err)
 }
 
-// StartSessionAsync creates a new session and starts the initial run in the background.
+// StartSessionAsync creates a new session and enqueues the initial run.
 func (r *Runner) StartSessionAsync(opts StartSessionOptions) (state.Session, state.Run, error) {
 	session, run, execOpts, err := r.prepareSession(opts)
 	if err != nil {
 		return state.Session{}, state.Run{}, err
 	}
-	go func(s state.Session, ru state.Run, eo sessionRunOptions) {
-		_ = r.executeSessionRun(s, ru, eo)
-	}(session, run, execOpts)
+	job := &scheduledJob{
+		sessionID: session.ID,
+		repoName:  session.RepoName,
+		runID:     run.ID,
+		fn: func() {
+			_ = r.executeSessionRun(session, run, execOpts)
+		},
+	}
+	r.sched.Submit(job)
+	run.State = runpkg.StateQueued.String()
 	return session, run, nil
 }
 
@@ -70,15 +78,22 @@ func (r *Runner) ContinueSession(sessionID, prompt string) (state.Run, error) {
 	return updatedRun, nil
 }
 
-// ContinueSessionAsync appends one follow-up run and executes it in the background.
+// ContinueSessionAsync appends one follow-up run and enqueues it.
 func (r *Runner) ContinueSessionAsync(sessionID, prompt string) (state.Run, error) {
 	session, run, execOpts, err := r.prepareFollowUpRun(sessionID, prompt)
 	if err != nil {
 		return state.Run{}, err
 	}
-	go func(s state.Session, ru state.Run, eo sessionRunOptions) {
-		_ = r.executeSessionRun(s, ru, eo)
-	}(session, run, execOpts)
+	job := &scheduledJob{
+		sessionID: session.ID,
+		repoName:  session.RepoName,
+		runID:     run.ID,
+		fn: func() {
+			_ = r.executeSessionRun(session, run, execOpts)
+		},
+	}
+	r.sched.Submit(job)
+	run.State = runpkg.StateQueued.String()
 	return run, nil
 }
 
@@ -175,7 +190,7 @@ func (r *Runner) prepareSession(opts StartSessionOptions) (state.Session, state.
 		Tool:         opts.Tool,
 		Model:        opts.Model,
 		AutoPR:       opts.AutoPR,
-		Status:       "CREATED",
+		Status:       runpkg.StateCreated.String(),
 		Busy:         true,
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -189,7 +204,7 @@ func (r *Runner) prepareSession(opts StartSessionOptions) (state.Session, state.
 		SessionID:    session.ID,
 		Prompt:       opts.Prompt,
 		WorktreePath: worktreePath,
-		State:        "CREATED",
+		State:        runpkg.StateCreated.String(),
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
@@ -249,7 +264,7 @@ func (r *Runner) prepareFollowUpRun(sessionID, prompt string) (state.Session, st
 		SessionID:    session.ID,
 		Prompt:       prompt,
 		WorktreePath: worktreePath,
-		State:        "CREATED",
+		State:        runpkg.StateCreated.String(),
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
@@ -257,7 +272,7 @@ func (r *Runner) prepareFollowUpRun(sessionID, prompt string) (state.Session, st
 		_ = r.runs.SetSessionBusy(session.ID, false)
 		return state.Session{}, state.Run{}, sessionRunOptions{}, err
 	}
-	if err := r.runs.UpdateSessionStatus(session.ID, "CREATED"); err != nil {
+	if err := r.runs.UpdateSessionStatus(session.ID, runpkg.StateCreated.String()); err != nil {
 		_ = r.runs.SetSessionBusy(session.ID, false)
 		return state.Session{}, state.Run{}, sessionRunOptions{}, err
 	}
@@ -468,6 +483,20 @@ func (r *Runner) CancelSessionLatestRun(sessionID string) (state.Run, error) {
 	current, ok := r.active[session.ID]
 	if !ok || current == nil {
 		r.mu.Unlock()
+		// Not active — check if it is queued and waiting to start.
+		if r.sched != nil {
+			if job, found := r.sched.Dequeue(session.ID); found {
+				job.markCancelled()
+				_ = r.runs.CompleteRun(job.runID, runpkg.StateCancelled.String(), "", "", "cancelled while queued")
+				_ = r.runs.SetSessionBusy(session.ID, false)
+				_ = r.runs.AppendRunEvent(state.RunEvent{
+					RunID:   job.runID,
+					Type:    "cancel_requested",
+					Message: "Cancellation requested by user",
+				})
+				return latest, nil
+			}
+		}
 		return state.Run{}, fmt.Errorf("latest run %q is not active", latest.ID)
 	}
 	if strings.TrimSpace(current.runID) != latest.ID {

@@ -65,7 +65,7 @@ func NewStore(fogHome string) (*Store, error) {
 	}
 
 	store := &Store{db: db, key: key}
-	if err := store.init(); err != nil {
+	if err := store.init(fogHome); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func NewStore(fogHome string) (*Store, error) {
 	return store, nil
 }
 
-func (s *Store) init() error {
+func (s *Store) init(fogHome string) error {
 	if _, err := s.db.Exec(`PRAGMA foreign_keys = ON;`); err != nil {
 		return fmt.Errorf("enable foreign keys: %w", err)
 	}
@@ -83,131 +83,7 @@ func (s *Store) init() error {
 	if _, err := s.db.Exec(`PRAGMA busy_timeout = 5000;`); err != nil {
 		return fmt.Errorf("set busy timeout: %w", err)
 	}
-
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS settings (
-			key TEXT PRIMARY KEY,
-			value TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		);`,
-		`CREATE TABLE IF NOT EXISTS secrets (
-			key TEXT PRIMARY KEY,
-			ciphertext BLOB NOT NULL,
-			updated_at TEXT NOT NULL
-		);`,
-		`CREATE TABLE IF NOT EXISTS repos (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL UNIQUE,
-			url TEXT NOT NULL,
-			host TEXT NOT NULL,
-			owner TEXT,
-			repo TEXT,
-			bare_path TEXT NOT NULL,
-			base_worktree_path TEXT NOT NULL,
-			default_branch TEXT,
-			created_at TEXT NOT NULL
-		);`,
-		`CREATE TABLE IF NOT EXISTS sessions (
-			id TEXT PRIMARY KEY,
-			repo_name TEXT NOT NULL,
-			branch TEXT NOT NULL,
-			worktree_path TEXT NOT NULL,
-			tool TEXT NOT NULL,
-			model TEXT,
-			autopr INTEGER NOT NULL DEFAULT 0,
-			pr_url TEXT,
-			status TEXT NOT NULL,
-			busy INTEGER NOT NULL DEFAULT 0,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL,
-			FOREIGN KEY(repo_name) REFERENCES repos(name)
-		);`,
-		`CREATE TABLE IF NOT EXISTS runs (
-			id TEXT PRIMARY KEY,
-			session_id TEXT NOT NULL,
-			prompt TEXT NOT NULL,
-			worktree_path TEXT,
-			state TEXT NOT NULL,
-			commit_sha TEXT,
-			commit_msg TEXT,
-			error TEXT,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL,
-			completed_at TEXT,
-			FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
-		);`,
-		`CREATE TABLE IF NOT EXISTS run_events (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			run_id TEXT NOT NULL,
-			ts TEXT NOT NULL,
-			type TEXT NOT NULL,
-			message TEXT,
-			data TEXT,
-			FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE
-		);`,
-
-		// Tasks sit above sessions: a task exists from the moment someone
-		// writes it down, and owns at most one session once work starts.
-		// The external_* columns mirror a tracker issue when the task is not
-		// Fog-owned; they stay empty for provider='local'.
-		`CREATE TABLE IF NOT EXISTS tasks (
-				id TEXT PRIMARY KEY,
-				title TEXT NOT NULL,
-				body TEXT,
-				status TEXT NOT NULL,
-				position REAL NOT NULL,
-				repo_name TEXT,
-				tool TEXT,
-				model TEXT,
-				base_branch TEXT,
-				session_id TEXT,
-				provider TEXT NOT NULL DEFAULT 'local',
-				external_id TEXT,
-				external_key TEXT,
-				external_url TEXT,
-				external_status TEXT,
-				synced_at TEXT,
-				created_at TEXT NOT NULL,
-				updated_at TEXT NOT NULL,
-				trashed_at TEXT,
-				FOREIGN KEY(repo_name) REFERENCES repos(name),
-				FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE SET NULL
-			);`,
-
-		`CREATE INDEX IF NOT EXISTS idx_sessions_repo_updated ON sessions(repo_name, updated_at DESC);`,
-		`CREATE INDEX IF NOT EXISTS idx_runs_session_created ON runs(session_id, created_at DESC);`,
-		`CREATE INDEX IF NOT EXISTS idx_run_events_run_ts ON run_events(run_id, ts DESC);`,
-		`CREATE INDEX IF NOT EXISTS idx_tasks_status_position ON tasks(status, position);`,
-		// One row per remote issue. Partial index so the many local tasks,
-		// which have no external id, don't collide with each other on NULL.
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_provider_external
-			ON tasks(provider, external_id)
-			WHERE external_id IS NOT NULL;`,
-	}
-
-	// An intermediate refactor shipped a differently-shaped `tasks` table
-	// (per-run execution rows keyed by repo_id/state/prompt). The current
-	// Kanban schema reuses the name with CREATE TABLE IF NOT EXISTS, which is
-	// a no-op against that legacy table, so the CREATE INDEX below would then
-	// fail on the missing `status` column. Drop the incompatible table first
-	// so the create statements recreate it in its current shape.
-	if err := s.dropLegacyTasksTable(); err != nil {
-		return err
-	}
-
-	for _, stmt := range stmts {
-		if _, err := s.db.Exec(stmt); err != nil {
-			return fmt.Errorf("init schema: %w", err)
-		}
-	}
-	if err := s.ensureRunsSchema(); err != nil {
-		return err
-	}
-	if err := s.ensureTasksSchema(); err != nil {
-		return err
-	}
-
-	return nil
+	return migrate(s.db, fogHome)
 }
 
 // Close closes the underlying database connection.
@@ -476,77 +352,6 @@ func (s *Store) GetRepoByName(name string) (Repo, bool, error) {
 
 func nowRFC3339Nano() string {
 	return time.Now().UTC().Format(time.RFC3339Nano)
-}
-
-// dropLegacyTasksTable removes a pre-existing `tasks` table left over from an
-// earlier schema whenever it lacks the current `status` column. The legacy and
-// current tables share nothing but the name, so there is no data worth
-// migrating; dropping lets init() recreate the table in its Kanban shape.
-func (s *Store) dropLegacyTasksTable() error {
-	exists, err := s.tableExists("tasks")
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return nil
-	}
-	hasStatus, err := s.tableColumnExists("tasks", "status")
-	if err != nil {
-		return err
-	}
-	if hasStatus {
-		return nil
-	}
-	if _, err := s.db.Exec(`DROP TABLE tasks`); err != nil {
-		return fmt.Errorf("drop legacy tasks table: %w", err)
-	}
-	return nil
-}
-
-// tableExists reports whether a table of the given name exists.
-func (s *Store) tableExists(tableName string) (bool, error) {
-	tableName = strings.TrimSpace(tableName)
-	if tableName == "" {
-		return false, errors.New("table name is required")
-	}
-	var name string
-	err := s.db.QueryRow(
-		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
-		tableName,
-	).Scan(&name)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("check table %s exists: %w", tableName, err)
-	}
-	return true, nil
-}
-
-func (s *Store) ensureRunsSchema() error {
-	const table = "runs"
-	if hasWorktree, err := s.tableColumnExists(table, "worktree_path"); err != nil {
-		return err
-	} else if !hasWorktree {
-		if _, err := s.db.Exec(`ALTER TABLE runs ADD COLUMN worktree_path TEXT`); err != nil {
-			return fmt.Errorf("add runs.worktree_path column: %w", err)
-		}
-	}
-	return nil
-}
-
-// ensureTasksSchema backfills the trashed_at column on databases created before
-// trash support existed. New databases already have it from the CREATE TABLE.
-func (s *Store) ensureTasksSchema() error {
-	const table = "tasks"
-	if hasTrashed, err := s.tableColumnExists(table, "trashed_at"); err != nil {
-		return err
-	} else if !hasTrashed {
-		if _, err := s.db.Exec(`ALTER TABLE tasks ADD COLUMN trashed_at TEXT`); err != nil {
-			return fmt.Errorf("add tasks.trashed_at column: %w", err)
-		}
-	}
-	return nil
 }
 
 func (s *Store) tableColumnExists(tableName, columnName string) (bool, error) {

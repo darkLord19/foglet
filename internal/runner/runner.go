@@ -25,6 +25,7 @@ type Runner struct {
 	power     *power.Inhibitor
 	mu        sync.Mutex
 	active    map[string]*activeRun
+	sched     *scheduler
 }
 
 // New creates a new runner. The state store st is optional (may be nil).
@@ -46,6 +47,7 @@ func New(st *state.Store) *Runner {
 		r.repos = st
 		r.settings = st
 	}
+	r.sched = newScheduler(r.baseCtx, r.runs, defaultMaxConcurrent(), 1)
 	return r
 }
 
@@ -54,6 +56,7 @@ func New(st *state.Store) *Runner {
 // cancelled on shutdown. CLI synchronous calls leave the default (Background()).
 func (r *Runner) SetBaseContext(ctx context.Context) {
 	r.baseCtx = ctx
+	r.sched = newScheduler(ctx, r.runs, defaultMaxConcurrent(), 1)
 }
 
 func (r *Runner) keepAwakeEnabled() bool {

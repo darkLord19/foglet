@@ -247,8 +247,8 @@ func newTestStore(t *testing.T) *Store {
 	return store
 }
 
-// TestStoreInitMigratesLegacyTasksTable reproduces the panic seen when an
-// on-disk database still holds the pre-Kanban `tasks` table: init() must drop
+// TestStoreInitMigratesLegacyTasksTable reproduces the behaviour when an
+// on-disk database holds the pre-Kanban `tasks` table: migration 1 must drop
 // the incompatible table and recreate it rather than failing to build the
 // status index.
 func TestStoreInitMigratesLegacyTasksTable(t *testing.T) {
@@ -274,11 +274,16 @@ func TestStoreInitMigratesLegacyTasksTable(t *testing.T) {
 	)`); err != nil {
 		t.Fatalf("create legacy tasks failed: %v", err)
 	}
+	// Reset user_version so migrate() re-runs migration 1 on the next open.
+	// This simulates a database created before the migration system existed.
+	if _, err := store.db.Exec(`PRAGMA user_version = 0`); err != nil {
+		t.Fatalf("reset user_version: %v", err)
+	}
 	if err := store.Close(); err != nil {
 		t.Fatalf("close store failed: %v", err)
 	}
 
-	// Re-opening runs init() again against the legacy table on disk.
+	// Re-opening triggers migrate() against the legacy table with user_version=0.
 	store, err = NewStore(home)
 	if err != nil {
 		t.Fatalf("reopen store failed: %v", err)
@@ -291,5 +296,79 @@ func TestStoreInitMigratesLegacyTasksTable(t *testing.T) {
 	}
 	if !hasStatus {
 		t.Fatal("expected tasks table to be recreated with a status column")
+	}
+}
+
+func TestMigrateAppliesVersions(t *testing.T) {
+	home := t.TempDir()
+	store, err := NewStore(home)
+	if err != nil {
+		t.Fatalf("new store: %v", err)
+	}
+	defer store.Close()
+
+	var ver int
+	if err := store.db.QueryRow(`PRAGMA user_version`).Scan(&ver); err != nil {
+		t.Fatalf("read user_version: %v", err)
+	}
+	want := len(allMigrations)
+	if ver != want {
+		t.Fatalf("user_version = %d, want %d", ver, want)
+	}
+
+	for _, table := range []string{"settings", "secrets", "repos", "sessions", "runs", "run_events", "tasks"} {
+		var name string
+		if err := store.db.QueryRow(
+			`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, table,
+		).Scan(&name); err != nil {
+			t.Fatalf("table %s missing: %v", table, err)
+		}
+	}
+}
+
+func TestMigrateIdempotent(t *testing.T) {
+	home := t.TempDir()
+	store, err := NewStore(home)
+	if err != nil {
+		t.Fatalf("first open: %v", err)
+	}
+	store.Close()
+
+	store, err = NewStore(home)
+	if err != nil {
+		t.Fatalf("second open: %v", err)
+	}
+	defer store.Close()
+
+	var ver int
+	if err := store.db.QueryRow(`PRAGMA user_version`).Scan(&ver); err != nil {
+		t.Fatalf("read user_version: %v", err)
+	}
+	if ver != len(allMigrations) {
+		t.Fatalf("user_version = %d after second open, want %d", ver, len(allMigrations))
+	}
+}
+
+func TestMigrateBackupCreated(t *testing.T) {
+	home := t.TempDir()
+	store, err := NewStore(home)
+	if err != nil {
+		t.Fatalf("first open: %v", err)
+	}
+	// Reset so re-opening will run migrations (and create a backup for version 0).
+	if _, err := store.db.Exec(`PRAGMA user_version = 0`); err != nil {
+		t.Fatalf("reset version: %v", err)
+	}
+	store.Close()
+
+	store, err = NewStore(home)
+	if err != nil {
+		t.Fatalf("second open: %v", err)
+	}
+	defer store.Close()
+
+	bak := filepath.Join(home, "fog.db.bak-0")
+	if _, err := os.Stat(bak); os.IsNotExist(err) {
+		t.Fatalf("expected backup %s to exist", bak)
 	}
 }

@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/darkLord19/foglet/internal/api"
@@ -37,6 +38,12 @@ func Build(ctx context.Context, opts BuildOpts) (*App, error) {
 	// 2. Create runner with state store
 	r := runner.New(store)
 	r.SetBaseContext(ctx)
+
+	// Reconcile runs left non-terminal by a previous crash.
+	if err := r.ReconcileOnStart(); err != nil {
+		store.Close()
+		return nil, fmt.Errorf("reconcile: %w", err)
+	}
 
 	// 3. Create API server
 	apiServer := api.New(r, store, opts.Port)

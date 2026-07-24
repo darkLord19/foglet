@@ -14,6 +14,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	runpkg "github.com/darkLord19/foglet/internal/run"
 )
 
 // Status is a column on the board.
@@ -194,11 +196,9 @@ func AutoStarts(from, to Status, origin Origin) (WorkKind, bool) {
 // is a human judgement. Failures stay put, because dragging a failed card back
 // yourself is clearer than Fog silently undoing your intent.
 func StatusForRunState(runState string) (Status, bool) {
-	switch strings.ToUpper(strings.TrimSpace(runState)) {
-	case "COMPLETED":
+	switch runpkg.State(strings.ToUpper(strings.TrimSpace(runState))) {
+	case runpkg.StateCompleted:
 		return StatusInReview, true
-	case "FAILED", "CANCELLED":
-		return "", false
 	default:
 		return "", false
 	}
