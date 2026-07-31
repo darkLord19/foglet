@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -174,6 +175,11 @@ func (s *Server) trackerConfig() (TrackerConfig, error) {
 	if raw := get(trackerStatusMapKey); raw != "" {
 		var m tracker.StatusMap
 		if err := json.Unmarshal([]byte(raw), &m); err == nil {
+			// Older databases predate In QA. Preserve their custom mappings and
+			// fill only the newly introduced column from the safe default.
+			if len(m.InQA) == 0 {
+				m.InQA = tracker.DefaultStatusMap().InQA
+			}
 			cfg.StatusMap = m
 		}
 	}
@@ -242,4 +248,28 @@ func (s *Server) SyncTracker(ctx context.Context) (tracker.Result, error) {
 	defer cancel()
 
 	return tracker.NewSyncer(provider, s.stateStore, statuses).Sync(ctx)
+}
+
+// StartTrackerSync keeps a configured external board fresh without making
+// tracker changes an agent-launching API call. Syncer applies remote moves
+// directly to state, so the OriginRemote safety rule remains intact.
+func (s *Server) StartTrackerSync(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		interval = 5 * time.Minute
+	}
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if _, err := s.SyncTracker(ctx); err != nil && !errors.Is(err, tracker.ErrNotConfigured) {
+					// A transient provider failure should not stop future syncs.
+					log.Printf("tracker: scheduled sync failed: %v", err)
+				}
+			}
+		}
+	}()
 }

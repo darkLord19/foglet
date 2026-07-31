@@ -5,8 +5,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/darkLord19/foglet/internal/api"
+	"github.com/darkLord19/foglet/internal/mcp"
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
 )
@@ -51,6 +53,14 @@ func Build(ctx context.Context, opts BuildOpts) (*App, error) {
 	// 4. Register routes on mux
 	mux := http.NewServeMux()
 	apiServer.RegisterRoutes(mux)
+	apiServer.StartTrackerSync(ctx, 5*time.Minute)
+	mcpUpstreams, err := mcp.LoadConfig(opts.FogHome)
+	if err != nil {
+		store.Close()
+		return nil, err
+	}
+	muxProxy := mcp.NewProxy(mcpUpstreams, store)
+	mux.Handle("/mcp", muxProxy)
 
 	// Sweep expired trash now and on an interval, tied to the app context.
 	apiServer.StartTrashJanitor(ctx)
