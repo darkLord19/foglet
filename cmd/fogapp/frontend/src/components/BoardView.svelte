@@ -73,9 +73,7 @@
                 // Starting an agent is consequential and happens off-screen,
                 // so this one does warrant a toast.
                 toast.success(
-                    res.kind === "review"
-                        ? `Reviewing “${task.title}”`
-                        : `Agent started on “${task.title}”`,
+                    workStartedMessage(task, res.kind),
                 );
             }
         } catch (err) {
@@ -107,16 +105,23 @@
                 appState.refreshTasks(),
                 appState.refreshSessions(),
             ]);
-            toast.success(
-                res.kind === "review"
-                    ? `Reviewing “${task.title}”`
-                    : `Agent started on “${task.title}”`,
-            );
+            toast.success(workStartedMessage(task, res.kind));
         } catch (err) {
             toast.error(
                 err instanceof Error ? err.message : "Couldn't start the task",
             );
         }
+    }
+
+    function workStartedMessage(task: Task, kind?: string): string {
+        const work = kind ?? task.status;
+        if (work === "review" || work === "in_review") {
+            return `Reviewing “${task.title}”`;
+        }
+        if (work === "qa" || work === "in_qa") {
+            return `Running QA on “${task.title}”`;
+        }
+        return `Agent started on “${task.title}”`;
     }
 
     function open(task: Task) {
@@ -362,8 +367,10 @@
     </div>
 
         <p class="board__hint">
-            <b>In progress</b> runs the agent · <b>In review</b> runs a reviewer
-            over its worktree · <b>Done</b> ages out past the selected window ·
+            Local moves into <b>In progress</b>, <b>In review</b>, or <b>In QA</b>
+            start the matching agent · tracker cards wait for an explicit
+            <b>Start</b>, <b>Review</b>, or <b>QA</b> · <b>Done</b> ages out past
+            the selected window ·
             <kbd class="kbd">⌥</kbd><kbd class="kbd">←</kbd
             ><kbd class="kbd">→</kbd> moves a focused card
         </p>

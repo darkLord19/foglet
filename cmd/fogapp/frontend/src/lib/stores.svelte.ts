@@ -109,6 +109,7 @@ class AppState {
             todo: [] as Task[],
             in_progress: [] as Task[],
             in_review: [] as Task[],
+            in_qa: [] as Task[],
             done: [] as Task[],
         };
         for (const task of this.tasks) {

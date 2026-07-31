@@ -166,7 +166,12 @@ export const ACTIVE_STATES: Record<string, boolean> = {
 
 // ── Tasks (board) ──
 
-export type TaskStatus = "todo" | "in_progress" | "in_review" | "done";
+export type TaskStatus =
+    | "todo"
+    | "in_progress"
+    | "in_review"
+    | "in_qa"
+    | "done";
 export type TaskProvider = "local" | "linear" | "jira";
 
 export interface Task {
@@ -196,7 +201,7 @@ export interface TaskResponse {
     task: Task;
     started: boolean;
     /** Which agent was launched: "implement" or "review". */
-    kind?: "implement" | "review";
+    kind?: "implement" | "review" | "qa";
     session_id?: string;
 }
 
@@ -223,14 +228,16 @@ export const TASK_COLUMNS: { id: TaskStatus; label: string }[] = [
     { id: "todo", label: "Todo" },
     { id: "in_progress", label: "In progress" },
     { id: "in_review", label: "In review" },
+    { id: "in_qa", label: "In QA" },
     { id: "done", label: "Done" },
 ];
 
 // ── Board timeline filter ──
 //
-// The board reads as a timeline: live work (todo / in progress / in review) is
-// always shown, while finished cards age out of the Done column once they fall
-// outside the selected window. `days: null` means "all time" (no cutoff).
+// The board reads as a timeline: live work (todo / in progress / in review /
+// in QA) is always shown, while finished cards age out of the Done column once
+// they fall outside the selected window. `days: null` means "all time" (no
+// cutoff).
 export type BoardWindow = "today" | "week" | "month" | "all";
 
 export const BOARD_WINDOWS: { id: BoardWindow; label: string; days: number | null }[] = [
@@ -246,6 +253,7 @@ export interface TrackerStatusMap {
     todo: string[];
     in_progress: string[];
     in_review: string[];
+    in_qa: string[];
     done: string[];
 }
 

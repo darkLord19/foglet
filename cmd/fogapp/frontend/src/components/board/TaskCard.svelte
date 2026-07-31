@@ -50,21 +50,27 @@
 
     const isRunning = $derived(!!session && appState.isSessionRunning(session));
 
+    const isTrackerTask = $derived(task.provider !== "local");
+
     /**
-     * A card sitting in a working column with nothing running is usually one
-     * that arrived from a tracker: remote moves reclassify but deliberately
-     * never launch an agent, so a human still has to start it.
-     *
-     * In Review only offers the button once an implementation exists — the
-     * reviewer reads that worktree, so there is nothing to review without it.
+     * Tracker moves reclassify a card but deliberately never launch an agent,
+     * so a human still has to choose the action. Review and QA only offer an
+     * action once an implementation exists — both agents read that worktree.
      */
     const needsStart = $derived(
-        (task.status === "in_progress" && !isRunning && !task.session_id) ||
-            (task.status === "in_review" && !isRunning && !!task.session_id),
+        !isRunning &&
+        ((task.status === "in_progress" &&
+            (isTrackerTask || !task.session_id)) ||
+            ((task.status === "in_review" || task.status === "in_qa") &&
+                !!task.session_id)),
     );
 
     const startLabel = $derived(
-        task.status === "in_review" ? "Review" : "Start",
+        task.status === "in_review"
+            ? "Review"
+            : task.status === "in_qa"
+              ? "QA"
+              : "Start",
     );
 
     function openIssue(e: MouseEvent) {
