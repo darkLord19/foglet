@@ -23,7 +23,7 @@ go install github.com/darkLord19/foglet/cmd/{wtx,fog,fogd,fogcloud,fogapp}@lates
 Fog needs:
 - GitHub CLI (`gh`) installed and authenticated to discover/import repos
 - a default AI tool to run when you omit `tool`
-- at least one installed supported AI CLI (`claude`, `cursor-agent`, or `agy`)
+- at least one installed supported AI CLI (`claude`, `cursor-agent`, `agy`, `codex`, or `copilot`)
 
 ```bash
 fog setup
@@ -137,6 +137,8 @@ Fog executes tools you already installed:
 - `claude` / `claude-code`
 - `agent`
 - `antigravity` (requires `agy` binary)
+- `codex`
+- `copilot`
 
 Adapters prefer headless/streaming modes when available and fall back to plain output when needed.
 
@@ -151,3 +153,22 @@ When enabled (`default_notify=true`), Fog sends macOS desktop notifications on r
 - `master.key`: local AES-256-GCM key used to encrypt secrets at rest
 
 Secrets are never stored in plaintext.
+
+## Shared MCP proxy
+
+Agents can use the authenticated local proxy at `POST /mcp` instead of
+configuring each harness separately. Configure non-secret upstreams in
+`FOG_HOME/mcp.json`:
+
+```json
+[
+  {
+    "name": "docs",
+    "url": "https://mcp.example.test/mcp",
+    "secret_key": "mcp.docs"
+  }
+]
+```
+
+`secret_key` refers to a secret already stored in Fog's encrypted secret store;
+the value is never written to `mcp.json` or returned through the proxy.

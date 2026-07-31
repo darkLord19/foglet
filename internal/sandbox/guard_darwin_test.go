@@ -18,6 +18,14 @@ func skipWithoutSandboxExec(t *testing.T) {
 	if _, err := os.Stat(sandboxExecPath); err != nil {
 		t.Skipf("sandbox-exec unavailable: %v", err)
 	}
+	probe, err := (Guard{DenyRead: []string{filepath.Join(os.TempDir(), "fog-sandbox-probe")}}).Wrap("/bin/echo", []string{"ok"})
+	if err != nil {
+		t.Skipf("sandbox-exec setup failed: %v", err)
+	}
+	defer probe.Cleanup()
+	if _, err := exec.Command(probe.Name, probe.Args...).CombinedOutput(); err != nil {
+		t.Skipf("sandbox-exec cannot run in this host: %v", err)
+	}
 }
 
 // The end-to-end check that the whole slice exists for: a denied file must not

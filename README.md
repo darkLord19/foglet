@@ -21,12 +21,18 @@ A session is a long-lived branch/worktree "conversation" that you can follow up 
 - Forking is explicit: it creates a new branch/worktree from the current session head.
 - Run output is persisted as events; active runs can be streamed via SSE.
 
+The task board progresses through Todo, In Progress, In Review, In QA, and Done.
+A successful implementation run advances its linked task into In Review; Done
+remains human-gated.
+
 ## Supported AI Tools
 
 Fog executes tools you already installed:
 - `claude` / `claude-code`
 - `cursor` (requires `cursor-agent` binary)
 - `antigravity` (requires `agy` binary)
+- `codex` (requires the Codex CLI)
+- `copilot` (requires the GitHub Copilot CLI)
 
 Adapters prefer headless/streaming modes when available and fall back to plain output when needed.
 
@@ -72,6 +78,7 @@ Fog home:
 - `FOG_HOME` (default `~/.fog`)
 - `FOG_HOME/fog.db` (SQLite state: repos, settings, sessions, runs, run events, tasks)
 - `FOG_HOME/master.key` (AES-256-GCM key for encrypting secrets at rest)
+- `FOG_HOME/mcp.json` (non-secret MCP upstream registry; credentials use secret references)
 - `FOG_HOME/repos/...` (bare clones + base worktrees)
 
 Fog uses the authenticated GitHub CLI (`gh`) for GitHub access and does not store a GitHub token.

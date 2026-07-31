@@ -11,8 +11,8 @@ section of `AGENTS.md` for the rules that must be preserved when changing it.
 
 - **Filesystem**: a macOS seatbelt profile denies reads of `~/.ssh`, `~/.aws`,
   `~/.config/gh`, `~/.claude.json`, and Fog's `master.key`, `api.token`, and
-  `fog.db`. Linux enforcement is not implemented (`guard_other.go` is a
-  passthrough reporting `Applied == false`).
+  `fog.db`. Linux filesystem enforcement is not implemented yet
+  (`guard_other.go` is a passthrough reporting `Applied == false`).
 - **Environment**: agents receive an allowlist rather than the daemon's full
   environment, scoped per tool via `toolEnvPrefixes`.
 

@@ -100,25 +100,34 @@ Other actions:
 - `GET /api/sessions/{id}/diff` (diff is base-branch vs session branch)
 - `POST /api/sessions/{id}/open` (open session worktree in editor)
 
-## Tasks (Legacy/One-Off)
+## Tasks (Desktop board)
 
 `GET /api/tasks`
 
-`POST /api/tasks/create`
+`POST /api/tasks`
 
 Body:
 
 ```json
 {
+  "title":"Do thing",
+  "body":"Context and acceptance criteria",
   "repo":"owner/repo",
-  "branch":"fog/task-branch",
-  "prompt":"Do thing",
-  "ai_tool":"claude",
-  "options":{"async":true,"commit":false,"create_pr":true,"pr_title":"feat: Do thing"}
+  "status":"todo"
 }
 ```
 
 `GET /api/tasks/{id}`
+
+`PATCH /api/tasks/{id}` updates task text, repository, tool, model, or base branch.
+
+`POST /api/tasks/{id}/move` moves a card and locally starts the matching
+implementer, reviewer, or QA run when the target is a working column.
+
+`POST /api/tasks/{id}/start` explicitly starts work for tracker-originated
+cards. Remote tracker moves never launch an agent automatically.
+
+Canonical statuses are `todo`, `in_progress`, `in_review`, `in_qa`, and `done`.
 
 ## Notes
 
