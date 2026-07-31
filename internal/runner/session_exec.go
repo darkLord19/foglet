@@ -215,6 +215,10 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 	if err := r.updateSessionStatusIfLatest(session.ID, run.ID, runpkg.StateCompleted.String()); err != nil {
 		return err
 	}
+	// A completed implementation has produced something reviewable. Reflect
+	// that outcome on the board, but leave review and QA outcomes alone: those
+	// are human-gated workflow states and must not silently become Done.
+	r.advanceTaskForCompletedImplementation(session.ID)
 	_ = r.runs.AppendRunEvent(state.RunEvent{
 		RunID:   run.ID,
 		Type:    "complete",

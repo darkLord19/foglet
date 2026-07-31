@@ -43,6 +43,14 @@ type RunStore interface {
 	SetSessionPRURL(id, prURL string) error
 }
 
+// TaskStore is the task slice the runner needs to reflect a completed
+// implementation back onto the board. Keeping it separate from RunStore
+// preserves the narrow session/run seam used by the execution tests.
+type TaskStore interface {
+	ListTasks() ([]state.Task, error)
+	MoveTask(id, status string, index int) error
+}
+
 // SettingsReader reads user preferences that alter how a run behaves.
 //
 // GetDefaultTool belongs here rather than as a raw GetSetting key because
@@ -92,6 +100,7 @@ type ToolFactory func(name string) (ai.Tool, error)
 // Compile-time proof that the production adapters satisfy the seams.
 var (
 	_ RunStore       = (*state.Store)(nil)
+	_ TaskStore      = (*state.Store)(nil)
 	_ SettingsReader = (*state.Store)(nil)
 	_ RepoReader     = (*state.Store)(nil)
 	_ ToolFactory    = ai.GetTool

@@ -52,7 +52,7 @@ type MoveTaskRequest struct {
 type TaskResponse struct {
 	Task    state.Task `json:"task"`
 	Started bool       `json:"started"`
-	// Kind is "implement" or "review" when Started is true.
+	// Kind is "implement", "review", or "qa" when Started is true.
 	Kind string `json:"kind,omitempty"`
 	// SessionID is set when this call launched or attached a session.
 	SessionID string `json:"session_id,omitempty"`
@@ -395,9 +395,17 @@ func (s *Server) startTask(w http.ResponseWriter, id string) {
 		return
 	}
 
-	kind := task.WorkImplement
-	if t.Status == task.StatusInReview.String() {
+	var kind task.WorkKind
+	switch t.Status {
+	case task.StatusInProgress.String():
+		kind = task.WorkImplement
+	case task.StatusInReview.String():
 		kind = task.WorkReview
+	case task.StatusInQA.String():
+		kind = task.WorkQA
+	default:
+		writeErr(w, http.StatusBadRequest, "task is not in a working column")
+		return
 	}
 
 	sessionID, err := s.startTaskWork(id, kind)
@@ -431,6 +439,9 @@ func (s *Server) startTaskWork(taskID string, kind task.WorkKind) (string, error
 
 	if kind == task.WorkReview {
 		return s.startTaskReview(t)
+	}
+	if kind == task.WorkQA {
+		return s.startTaskQA(t)
 	}
 
 	if strings.TrimSpace(t.RepoName) == "" {
@@ -487,6 +498,28 @@ func (s *Server) startTaskReview(t state.Task) (string, error) {
 	}
 
 	if _, err := s.runner.ContinueSessionAsync(t.SessionID, task.ReviewPrompt(t.Title, t.Body)); err != nil {
+		return "", err
+	}
+	return t.SessionID, nil
+}
+
+func (s *Server) startTaskQA(t state.Task) (string, error) {
+	if strings.TrimSpace(t.SessionID) == "" {
+		return "", errors.New("nothing to validate: this task has not been implemented yet")
+	}
+
+	session, found, err := s.runner.GetSession(t.SessionID)
+	if err != nil {
+		return "", err
+	}
+	if !found {
+		return "", fmt.Errorf("session %s no longer exists", t.SessionID)
+	}
+	if session.Busy {
+		return "", errors.New("the prior agent is still running; wait for it to finish")
+	}
+
+	if _, err := s.runner.ContinueSessionAsync(t.SessionID, task.QAPrompt(t.Title, t.Body)); err != nil {
 		return "", err
 	}
 	return t.SessionID, nil

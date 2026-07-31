@@ -67,7 +67,7 @@ func TestCanTransition(t *testing.T) {
 // change arriving from a shared external tracker must never launch an agent on
 // this machine, into either working column.
 func TestAutoStartsRequiresLocalOrigin(t *testing.T) {
-	for _, to := range []Status{StatusInProgress, StatusInReview} {
+	for _, to := range []Status{StatusInProgress, StatusInReview, StatusInQA} {
 		for _, from := range Statuses() {
 			if from == to {
 				continue
@@ -92,6 +92,8 @@ func TestAutoStartsKindPerColumn(t *testing.T) {
 		{StatusDone, StatusInProgress, WorkImplement, true},
 		{StatusInProgress, StatusInReview, WorkReview, true},
 		{StatusTodo, StatusInReview, WorkReview, true},
+		{StatusInReview, StatusInQA, WorkQA, true},
+		{StatusTodo, StatusInQA, WorkQA, true},
 		{StatusInReview, StatusDone, WorkNone, false},
 		{StatusInProgress, StatusTodo, WorkNone, false},
 		{StatusInReview, StatusTodo, WorkNone, false},
@@ -108,7 +110,7 @@ func TestAutoStartsKindPerColumn(t *testing.T) {
 
 func TestAutoStartsIgnoresReentry(t *testing.T) {
 	// Re-entering a column must not spawn a second run of the same kind.
-	for _, s := range []Status{StatusInProgress, StatusInReview} {
+	for _, s := range []Status{StatusInProgress, StatusInReview, StatusInQA} {
 		if _, ok := AutoStarts(s, s, OriginLocal); ok {
 			t.Errorf("AutoStarts(%s -> %s) started work, want none", s, s)
 		}
@@ -167,7 +169,7 @@ func TestValidators(t *testing.T) {
 	if !Provider("linear").Valid() || Provider("nope").Valid() {
 		t.Error("Provider.Valid is wrong")
 	}
-	if len(Statuses()) != 4 {
-		t.Errorf("Statuses() returned %d columns, want 4", len(Statuses()))
+	if len(Statuses()) != 5 {
+		t.Errorf("Statuses() returned %d columns, want 5", len(Statuses()))
 	}
 }

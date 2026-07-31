@@ -66,6 +66,7 @@ type StatusMap struct {
 	Todo       []string `json:"todo"`
 	InProgress []string `json:"in_progress"`
 	InReview   []string `json:"in_review"`
+	InQA       []string `json:"in_qa"`
 	Done       []string `json:"done"`
 }
 
@@ -76,6 +77,7 @@ func DefaultStatusMap() StatusMap {
 		Todo:       []string{"Todo", "To Do", "Backlog", "Open", "Unstarted"},
 		InProgress: []string{"In Progress", "Started", "Doing"},
 		InReview:   []string{"In Review", "Review", "Code Review", "Reviewing"},
+		InQA:       []string{"In QA", "QA", "Testing", "Test"},
 		Done:       []string{"Done", "Completed", "Closed", "Merged", "Resolved"},
 	}
 }
@@ -102,6 +104,7 @@ func (m StatusMap) ToFog(remote string) (task.Status, bool) {
 	}{
 		{m.InReview, task.StatusInReview},
 		{m.InProgress, task.StatusInProgress},
+		{m.InQA, task.StatusInQA},
 		{m.Done, task.StatusDone},
 		{m.Todo, task.StatusTodo},
 	} {
@@ -124,6 +127,8 @@ func (m StatusMap) ToRemote(status task.Status) (string, bool) {
 		names = m.InProgress
 	case task.StatusInReview:
 		names = m.InReview
+	case task.StatusInQA:
+		names = m.InQA
 	case task.StatusDone:
 		names = m.Done
 	default:

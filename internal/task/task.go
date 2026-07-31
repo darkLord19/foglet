@@ -20,7 +20,7 @@ import (
 
 // Status is a column on the board.
 //
-// These four are Fog's canonical vocabulary. External trackers have their own
+// These five are Fog's canonical vocabulary. External trackers have their own
 // (and Jira's are user-configurable per project), so a provider mapping
 // translates at the boundary rather than leaking foreign statuses inward.
 type Status string
@@ -35,6 +35,9 @@ const (
 	// in the session's own worktree. Review is local: no pull request, no
 	// remote round trip.
 	StatusInReview Status = "in_review"
+	// StatusInQA means a QA agent is validating the implementation in the
+	// session's existing worktree. QA is local and read-only.
+	StatusInQA Status = "in_qa"
 	// StatusDone is terminal — the human accepted the work.
 	StatusDone Status = "done"
 )
@@ -50,17 +53,20 @@ const (
 	// WorkReview runs a reviewer agent as a follow-up run on the existing
 	// session, so it reads the same worktree the implementation produced.
 	WorkReview WorkKind = "review"
+	// WorkQA runs a QA agent as a follow-up run on the existing session, so it
+	// validates the same worktree without creating another branch.
+	WorkQA WorkKind = "qa"
 )
 
 // Statuses returns the canonical board columns in display order.
 func Statuses() []Status {
-	return []Status{StatusTodo, StatusInProgress, StatusInReview, StatusDone}
+	return []Status{StatusTodo, StatusInProgress, StatusInReview, StatusInQA, StatusDone}
 }
 
 // Valid reports whether s is a known status.
 func (s Status) Valid() bool {
 	switch s {
-	case StatusTodo, StatusInProgress, StatusInReview, StatusDone:
+	case StatusTodo, StatusInProgress, StatusInReview, StatusInQA, StatusDone:
 		return true
 	default:
 		return false
@@ -153,11 +159,12 @@ func CanTransition(from, to Status) error {
 // AutoStarts reports which agent, if any, a transition should launch
 // immediately and without asking.
 //
-// Two columns start work:
+// Three columns start work:
 //
 //   - In Progress runs the implementation agent in a new session.
 //   - In Review runs a reviewer agent as a follow-up on that same session, so
 //     it reads the worktree the implementation just wrote.
+//   - In QA runs a QA agent as a follow-up on that same session.
 //
 // Three conditions gate it:
 //
@@ -182,6 +189,8 @@ func AutoStarts(from, to Status, origin Origin) (WorkKind, bool) {
 		return WorkImplement, true
 	case StatusInReview:
 		return WorkReview, true
+	case StatusInQA:
+		return WorkQA, true
 	default:
 		return WorkNone, false
 	}
@@ -227,5 +236,25 @@ func ReviewPrompt(title, body string) string {
 	b.WriteString("  4. Anything risky a reader would want flagged.\n\n")
 	b.WriteString("Do not modify files. If the work looks correct, say so plainly ")
 	b.WriteString("rather than inventing problems to report.")
+	return b.String()
+}
+
+// QAPrompt is the instruction handed to the QA agent. QA may create or update
+// regression tests, but it must not change production behavior while
+// validating the implementation.
+func QAPrompt(title, body string) string {
+	var b strings.Builder
+	b.WriteString("You are validating an implementation, not changing production code.\n\n")
+	b.WriteString("Original task\n")
+	b.WriteString("-------------\n")
+	b.WriteString(strings.TrimSpace(title))
+	if trimmed := strings.TrimSpace(body); trimmed != "" {
+		b.WriteString("\n\n")
+		b.WriteString(trimmed)
+	}
+	b.WriteString("\n\nRun the relevant unit, integration, and browser checks for this task. ")
+	b.WriteString("Use the configured browser/computer-use MCP tools when available and create a Playwright regression test for each browser path you exercise. ")
+	b.WriteString("You may add or update regression tests, but do not modify production code. ")
+	b.WriteString("Report failures with the exact command, input, and observed result.")
 	return b.String()
 }

@@ -17,6 +17,7 @@ import (
 // Runner orchestrates AI task execution
 type Runner struct {
 	runs      RunStore
+	tasks     TaskStore
 	repos     RepoReader
 	settings  SettingsReader
 	tools     ToolFactory
@@ -44,6 +45,7 @@ func New(st *state.Store) *Runner {
 	// itself non-nil, which would turn every nil-store guard into a panic.
 	if st != nil {
 		r.runs = st
+		r.tasks = st
 		r.repos = st
 		r.settings = st
 	}
