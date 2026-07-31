@@ -13,7 +13,3 @@ The current proxy is intentionally narrow:
 - the local API bearer token protects the endpoint;
 - unavailable upstreams fail the request instead of silently returning partial
   tool results.
-
-The experimental `plugins/claude-code` package is separate: it exposes `wtx`
-worktree operations as a Claude-specific MCP server and is not the shared Fog
-proxy.
