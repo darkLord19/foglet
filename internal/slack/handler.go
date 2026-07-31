@@ -1,8 +1,10 @@
 package slack
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -10,6 +12,8 @@ import (
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
 )
+
+const maxSlackRequestBody = 1 << 20
 
 // Handler handles Slack slash commands and interactions.
 type Handler struct {
@@ -47,6 +51,24 @@ func (h *Handler) HandleCommand(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxSlackRequestBody+1))
+	if err != nil {
+		http.Error(w, "read request body failed", http.StatusBadRequest)
+		return
+	}
+	if len(body) > maxSlackRequestBody {
+		http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+	if err := verifySlackSignature(h.signingSecret, r.Header, body, time.Now().UTC()); err != nil {
+		http.Error(w, "invalid slack signature", http.StatusUnauthorized)
+		return
+	}
+
+	// ParseForm consumes the body. Restore the verified bytes so the payload
+	// Slack signed is exactly the payload that gets parsed below.
+	r.Body = io.NopCloser(bytes.NewReader(body))
 
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
