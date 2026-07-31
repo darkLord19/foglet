@@ -54,6 +54,10 @@ func GetTool(name string) (Tool, error) {
 		return &ClaudeCode{}, nil
 	case "antigravity", "agy":
 		return &Antigravity{}, nil
+	case "codex", "openai-codex":
+		return &Codex{}, nil
+	case "copilot", "github-copilot", "copilot-cli":
+		return &Copilot{}, nil
 	default:
 		return nil, fmt.Errorf("unknown AI tool: %s", name)
 	}
@@ -65,6 +69,8 @@ func DetectTool(preferred string) (Tool, error) {
 		&Cursor{},
 		&ClaudeCode{},
 		&Antigravity{},
+		&Codex{},
+		&Copilot{},
 	}
 
 	// Try preferred first
@@ -87,7 +93,7 @@ func DetectTool(preferred string) (Tool, error) {
 
 // AvailableToolNames returns canonical tool names supported by Fog.
 func AvailableToolNames() []string {
-	return []string{"cursor", "claude", "antigravity"}
+	return []string{"cursor", "claude", "antigravity", "codex", "copilot"}
 }
 
 func normalizeToolName(name string) string {
@@ -95,6 +101,10 @@ func normalizeToolName(name string) string {
 	switch value {
 	case "claude-code":
 		return "claude"
+	case "openai-codex":
+		return "codex"
+	case "github-copilot", "copilot-cli":
+		return "copilot"
 	default:
 		return value
 	}

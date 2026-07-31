@@ -19,6 +19,11 @@ var toolEnvPrefixes = map[string][]string{
 	"claude":      {"ANTHROPIC_", "CLAUDE_"},
 	"cursor":      {"CURSOR_"},
 	"antigravity": {"ANTIGRAVITY_", "AGY_", "GEMINI_"},
+	"codex":       {"CODEX_", "OPENAI_"},
+	// Copilot's CLI authentication is normally managed by its own login
+	// flow. Only the tool-specific configuration family is admitted here;
+	// broad GITHUB_/GH_ prefixes would expose unrelated Git credentials.
+	"copilot": {"COPILOT_"},
 }
 
 // hostGuard builds the deny-list applied to every AI CLI invocation.
