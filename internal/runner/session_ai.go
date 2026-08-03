@@ -32,11 +32,20 @@ func (r *Runner) runToolWithOptions(
 		return "", "", fmt.Errorf("AI tool %s not available", toolName)
 	}
 
+	mcpFile := ""
+	if r.mcpProvider != nil {
+		if path, cleanup, merr := r.mcpProvider(); merr == nil {
+			mcpFile = path
+			defer cleanup()
+		}
+	}
+
 	result, err := tool.ExecuteStream(ctx, ai.ExecuteRequest{
 		Workdir:        workdir,
 		Prompt:         prompt,
 		Model:          model,
 		ConversationID: conversationID,
+		MCPConfigFile:  mcpFile,
 	}, onChunk)
 	if result == nil {
 		return "", "", err

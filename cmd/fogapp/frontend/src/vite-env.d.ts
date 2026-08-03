@@ -18,6 +18,7 @@ declare global {
         // standalone, so every use must be guarded.
         runtime?: {
             BrowserOpenURL: (url: string) => void;
+            Environment?: () => Promise<{ platform: string; arch: string; buildType: string }>;
         };
     }
 }

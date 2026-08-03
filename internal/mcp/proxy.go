@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -74,6 +75,7 @@ type jsonRPCResponse struct {
 // Proxy implements the small MCP surface required by coding agents and
 // forwards tools/list and tools/call to configured streamable HTTP servers.
 type Proxy struct {
+	mu        sync.RWMutex
 	upstreams []Upstream
 	secrets   SecretReader
 	client    *http.Client
@@ -86,6 +88,40 @@ func NewProxy(upstreams []Upstream, secrets SecretReader) *Proxy {
 		secrets:   secrets,
 		client:    &http.Client{Timeout: 30 * time.Second},
 	}
+}
+
+// SetUpstreams replaces the live upstream list. Safe for concurrent use.
+func (p *Proxy) SetUpstreams(upstreams []Upstream) {
+	cp := append([]Upstream(nil), upstreams...)
+	p.mu.Lock()
+	p.upstreams = cp
+	p.mu.Unlock()
+}
+
+// Upstreams returns a snapshot of the current upstream list. Safe for concurrent use.
+func (p *Proxy) Upstreams() []Upstream {
+	p.mu.RLock()
+	cp := append([]Upstream(nil), p.upstreams...)
+	p.mu.RUnlock()
+	return cp
+}
+
+// SaveConfig writes upstreams to FOG_HOME/mcp.json atomically.
+func SaveConfig(fogHome string, upstreams []Upstream) error {
+	path := filepath.Join(strings.TrimSpace(fogHome), "mcp.json")
+	data, err := json.MarshalIndent(upstreams, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal MCP config: %w", err)
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return fmt.Errorf("write MCP config: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("commit MCP config: %w", err)
+	}
+	return nil
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +185,10 @@ func (p *Proxy) handleList(w http.ResponseWriter, ctx context.Context, id json.R
 
 func (p *Proxy) listTools(ctx context.Context) ([]map[string]any, error) {
 	all := make([]map[string]any, 0)
-	for _, upstream := range p.upstreams {
+	p.mu.RLock()
+	upstreams := append([]Upstream(nil), p.upstreams...)
+	p.mu.RUnlock()
+	for _, upstream := range upstreams {
 		resp, err := p.callUpstream(ctx, upstream, jsonRPCRequest{JSONRPC: "2.0", ID: json.RawMessage(`1`), Method: "tools/list"})
 		if err != nil {
 			return nil, fmt.Errorf("list tools from %s: %w", upstream.Name, err)
@@ -184,7 +223,10 @@ func (p *Proxy) handleCall(w http.ResponseWriter, ctx context.Context, id json.R
 		return
 	}
 	var upstream Upstream
-	for _, candidate := range p.upstreams {
+	p.mu.RLock()
+	candidates := append([]Upstream(nil), p.upstreams...)
+	p.mu.RUnlock()
+	for _, candidate := range candidates {
 		if candidate.Name == parts[0] {
 			upstream = candidate
 			break

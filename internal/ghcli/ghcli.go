@@ -55,6 +55,25 @@ func IsGhAuthenticated() bool {
 	return cmd.Run() == nil
 }
 
+// GetAuthToken returns the active GitHub auth token from the gh CLI.
+// Returns ("", false, nil) when gh is not available or not authenticated.
+func GetAuthToken() (token string, found bool, err error) {
+	gh := ghPathFn()
+	if gh == "" {
+		return "", false, nil
+	}
+	cmd := execCommand(gh, "auth", "token")
+	out, runErr := cmd.Output()
+	if runErr != nil {
+		return "", false, nil
+	}
+	t := strings.TrimSpace(string(out))
+	if t == "" {
+		return "", false, nil
+	}
+	return t, true, nil
+}
+
 // DiscoverRepos fetches the list of repositories available to the authenticated user.
 func DiscoverRepos() ([]Repo, error) {
 	gh := ghPathFn()

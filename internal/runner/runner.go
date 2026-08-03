@@ -16,17 +16,18 @@ import (
 
 // Runner orchestrates AI task execution
 type Runner struct {
-	runs      RunStore
-	tasks     TaskStore
-	repos     RepoReader
-	settings  SettingsReader
-	tools     ToolFactory
-	publisher Publisher
-	baseCtx   context.Context
-	power     *power.Inhibitor
-	mu        sync.Mutex
-	active    map[string]*activeRun
-	sched     *scheduler
+	runs        RunStore
+	tasks       TaskStore
+	repos       RepoReader
+	settings    SettingsReader
+	tools       ToolFactory
+	publisher   Publisher
+	mcpProvider MCPConfigProvider
+	baseCtx     context.Context
+	power       *power.Inhibitor
+	mu          sync.Mutex
+	active      map[string]*activeRun
+	sched       *scheduler
 }
 
 // New creates a new runner. The state store st is optional (may be nil).
@@ -51,6 +52,12 @@ func New(st *state.Store) *Runner {
 	}
 	r.sched = newScheduler(r.baseCtx, r.runs, defaultMaxConcurrent(), 1)
 	return r
+}
+
+// SetMCPProvider wires the MCP config provider so agents started by this runner
+// automatically receive --mcp-config for any servers configured in Fog.
+func (r *Runner) SetMCPProvider(p MCPConfigProvider) {
+	r.mcpProvider = p
 }
 
 // SetBaseContext replaces the default context.Background() used as the parent

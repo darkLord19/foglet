@@ -57,8 +57,14 @@ html,
 body {
   block-size: 100%;
   overflow-x: clip;
+  overscroll-behavior: none;
   background: var(--color-paper);
   color: var(--color-ink);
+}
+
+/* macOS traffic-light inset offset — raised by JS when platform is darwin */
+:root[data-platform="darwin"] {
+  --titlebar-inset: 36px;
 }
 
 body {
@@ -121,6 +127,13 @@ textarea,
 select {
   font: inherit;
   color: inherit;
+}
+
+/* Chrome elements are not text — buttons and tabs should not be selectable. */
+button,
+[role="tab"],
+[role="radio"] {
+  user-select: none;
 }
 
 /* Global focus floor: anything focusable without a primitive class still

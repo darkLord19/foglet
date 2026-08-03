@@ -116,6 +116,8 @@
   /* ── Layout ────────────────────────────────────────────────────── */
   --bar-h: 2.75rem;    /* 44px */
   --shell-max: 1600px;
+  --sidebar-w: 14rem;  /* 224px — persistent nav rail */
+  --titlebar-inset: 0px; /* raised on darwin to clear traffic lights */
 
   /* ── Motion ────────────────────────────────────────────────────── */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);

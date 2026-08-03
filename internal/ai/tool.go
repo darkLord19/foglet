@@ -35,6 +35,9 @@ type ExecuteRequest struct {
 	Prompt         string
 	Model          string
 	ConversationID string
+	// MCPConfigFile, if non-empty, is a path to a JSON file Claude Code loads via
+	// --mcp-config. Adapters that don't support this field ignore it.
+	MCPConfigFile string
 }
 
 // Result contains the AI execution result

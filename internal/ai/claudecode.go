@@ -30,6 +30,9 @@ func (c *ClaudeCode) ExecuteStream(ctx context.Context, req ExecuteRequest, onCh
 	if conversationID := strings.TrimSpace(req.ConversationID); conversationID != "" {
 		args = append(args, "--resume", conversationID)
 	}
+	if cfgFile := strings.TrimSpace(req.MCPConfigFile); cfgFile != "" {
+		args = append(args, "--mcp-config", cfgFile)
+	}
 
 	streamArgs := append(append([]string{}, args...), "--output-format", "stream-json")
 	output, conversationID, err := runJSONStreamingCommand(ctx, c.Name(), req.Workdir, cmdName, streamArgs, onChunk)

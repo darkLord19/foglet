@@ -12,6 +12,7 @@ import (
 	"github.com/darkLord19/foglet/internal/ai"
 	"github.com/darkLord19/foglet/internal/ghcli"
 	"github.com/darkLord19/foglet/internal/git"
+	"github.com/darkLord19/foglet/internal/mcp"
 	"github.com/darkLord19/foglet/internal/runner"
 	"github.com/darkLord19/foglet/internal/state"
 )
@@ -22,6 +23,8 @@ type Server struct {
 	stateStore    *state.Store
 	port          int
 	skipToolCheck bool // for testing: bypass isToolAvailable
+	mcpProxy      *mcp.Proxy
+	fogHome       string
 }
 
 // New creates a new API server
@@ -31,6 +34,12 @@ func New(runner *runner.Runner, stateStore *state.Store, port int) *Server {
 		stateStore: stateStore,
 		port:       port,
 	}
+}
+
+// SetMCP wires the live MCP proxy and fogHome so /api/mcp can manage it.
+func (s *Server) SetMCP(proxy *mcp.Proxy, fogHome string) {
+	s.mcpProxy = proxy
+	s.fogHome = fogHome
 }
 
 // RegisterRoutes registers API routes on the provided mux
@@ -47,6 +56,8 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/repos/discover", s.handleDiscoverRepos)
 	mux.HandleFunc("/api/repos/import", s.handleImportRepos)
 	mux.HandleFunc("/api/settings", s.handleSettings)
+	mux.HandleFunc("/api/mcp", s.handleMCP)
+	mux.HandleFunc("/api/mcp/github-connect", s.handleMCPGitHubConnect)
 	mux.HandleFunc("/api/gh/status", s.handleGhStatus)
 	mux.HandleFunc("/api/cloud", s.handleCloud)
 	mux.HandleFunc("/api/cloud/pair", s.handleCloudPair)

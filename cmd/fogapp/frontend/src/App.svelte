@@ -7,10 +7,43 @@
   import SessionDetail from "./components/SessionDetail.svelte";
   import SettingsView from "./components/Settings.svelte";
   import Onboarding from "./components/Onboarding.svelte";
+  import Sidebar from "./components/Sidebar.svelte";
 
   let initError = $state("");
 
+  function handleKey(e: KeyboardEvent) {
+    if (e.metaKey && e.key === ",") {
+      e.preventDefault();
+      appState.setView("settings");
+    } else if (e.metaKey && e.key === "n") {
+      e.preventDefault();
+      appState.setView("new");
+    } else if (e.key === "Escape" && appState.currentView === "detail") {
+      appState.setView("board");
+    }
+  }
+
+  function blockContext(e: MouseEvent) {
+    e.preventDefault();
+  }
+
   onMount(async () => {
+    // Platform detection: set data-platform on <html> so CSS can react.
+    // window.runtime is only present inside the Wails shell.
+    const env = await window.runtime?.Environment?.();
+    if (env?.platform) {
+      document.documentElement.setAttribute("data-platform", env.platform);
+    }
+
+    // Global keyboard shortcuts.
+    window.addEventListener("keydown", handleKey);
+
+    // Suppress browser context menu in production builds (prevents Wails'
+    // "Reload" / "Inspect Element" from appearing on right-click).
+    if (import.meta.env.PROD) {
+      document.addEventListener("contextmenu", blockContext);
+    }
+
     try {
       await appState.bootstrap();
     } catch (err) {
@@ -20,6 +53,8 @@
 
   onDestroy(() => {
     appState.destroy();
+    window.removeEventListener("keydown", handleKey);
+    document.removeEventListener("contextmenu", blockContext);
   });
 </script>
 
@@ -49,35 +84,59 @@
   <Onboarding />
 {:else}
   <div class="shell">
+    <Sidebar />
     <main class="shell__main">
-      {#if appState.currentView === "board"}
-        <BoardView />
-      {:else if appState.currentView === "new"}
-        <HomeView />
-      {:else if appState.currentView === "detail"}
-        <SessionDetail />
-      {:else if appState.currentView === "settings"}
-        <SettingsView />
-      {/if}
+      <!-- {#key} destroys and recreates the view div on every navigation,
+           triggering the CSS fade-in animation. Only opacity is animated,
+           consistent with the design.md motion rules. -->
+      {#key appState.currentView}
+        <div class="view">
+          {#if appState.currentView === "board"}
+            <BoardView />
+          {:else if appState.currentView === "new"}
+            <HomeView />
+          {:else if appState.currentView === "detail"}
+            <SessionDetail />
+          {:else if appState.currentView === "settings"}
+            <SettingsView />
+          {/if}
+        </div>
+      {/key}
     </main>
   </div>
 {/if}
 
 <style>
   .shell {
-    display: flex;
+    display: grid;
+    grid-template-columns: var(--sidebar-w) 1fr;
     block-size: 100dvh;
     overflow: hidden;
     background: var(--color-paper);
   }
 
   .shell__main {
-    flex: 1;
     display: flex;
     flex-direction: column;
     min-inline-size: 0;
     min-block-size: 0;
     overflow: hidden;
+  }
+
+  /* Fade-in on every view switch. The {#key} destroys the old .view and
+     mounts a new one, so only the enter animation is needed. */
+  .view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+    min-inline-size: 0;
+    animation: view-in var(--dur-short) var(--ease-out) both;
+  }
+
+  @keyframes view-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
   }
 
   .stage {

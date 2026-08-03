@@ -23,7 +23,7 @@ was built and rejected. Do not reintroduce its vocabulary.
 
 ## Shell
 
-A **persistent sidebar** plus a single main pane.
+A **persistent sidebar** (`Sidebar.svelte`, `--sidebar-w: 14rem`) plus a single main pane. Shell layout is `display: grid; grid-template-columns: var(--sidebar-w) 1fr` in `App.svelte`.
 
 ```
 ┌──────────────┬────────────────────────────────────┐
@@ -31,9 +31,9 @@ A **persistent sidebar** plus a single main pane.
 │  Board       │                                    │
 │  New session │   Board · Session · Settings       │
 │              │                                    │
-│  Running     │                                    │
+│  RUNNING     │                                    │
 │  · session   │                                    │
-│  Recent      │                                    │
+│  FINISHED    │                                    │
 │  · session   │                                    │
 │              │                                    │
 │  Settings    │                                    │
@@ -43,6 +43,11 @@ A **persistent sidebar** plus a single main pane.
 Sessions live in the sidebar and are always visible; switching is one click.
 The main pane shows the board, a session, or settings. There is no top nav —
 `TopNav.svelte` is retained but unused, pending a decision to delete it.
+
+View navigation is keyboard-accessible: **⌘,** for Settings, **⌘N** for New
+session, **Escape** (from detail) to return to Board. View transitions are a
+CSS `opacity` fade-in on mount (`--dur-short`), triggered by the `{#key}` block
+in `App.svelte`.
 
 ## Surfaces
 
@@ -225,7 +230,7 @@ The primitives in `primitives.css` implement all eight once.
 
 The board is the app's primary surface, so its rules are part of the system:
 
-- Columns are Todo · In progress · In review · Done, in that order.
+- Columns are Todo · In progress · In review · In QA · Done, in that order.
 - **Moving a card into a working column starts an agent** — In progress runs the
   implementation, In review runs a reviewer over the same worktree. This is
   driven by `internal/task`, not by the UI.

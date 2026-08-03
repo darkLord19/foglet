@@ -61,6 +61,13 @@ func Build(ctx context.Context, opts BuildOpts) (*App, error) {
 	}
 	muxProxy := mcp.NewProxy(mcpUpstreams, store)
 	mux.Handle("/mcp", muxProxy)
+	apiServer.SetMCP(muxProxy, opts.FogHome)
+
+	// Inject MCP config into every agent session Fog starts.
+	fogHome := opts.FogHome
+	r.SetMCPProvider(func() (string, func(), error) {
+		return mcp.BuildConfigFile(fogHome, store)
+	})
 
 	// Sweep expired trash now and on an interval, tied to the app context.
 	apiServer.StartTrashJanitor(ctx)

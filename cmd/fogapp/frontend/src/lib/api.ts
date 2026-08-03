@@ -25,6 +25,8 @@ import type {
     TrackerConfig,
     UpdateTrackerPayload,
     SyncResult,
+    MCPConfig,
+    UpdateMCPPayload,
 } from "./types";
 
 let apiBaseURL = "http://127.0.0.1:8080";
@@ -370,6 +372,24 @@ export async function startTask(taskID: string): Promise<TaskResponse> {
         "/api/tasks/" + encodeURIComponent(taskID) + "/start",
         { method: "POST" },
     );
+}
+
+// ── MCP ──
+
+export async function fetchMCPConfig(): Promise<MCPConfig> {
+    return fetchJSON<MCPConfig>("/api/mcp");
+}
+
+export async function updateMCPConfig(payload: UpdateMCPPayload): Promise<MCPConfig> {
+    return fetchJSON<MCPConfig>("/api/mcp", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+}
+
+export async function connectGitHubMCP(): Promise<MCPConfig> {
+    return fetchJSON<MCPConfig>("/api/mcp/github-connect", { method: "POST" });
 }
 
 // ── Tracker ──

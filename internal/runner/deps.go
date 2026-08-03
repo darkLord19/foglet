@@ -97,6 +97,11 @@ func (ghPublisher) CreatePR(ctx context.Context, workdir, title, body, baseBranc
 // before spawning anything.
 type ToolFactory func(name string) (ai.Tool, error)
 
+// MCPConfigProvider builds a temporary MCP config file for an agent session and
+// returns its path and a cleanup function. Returns ("", no-op, nil) when no MCPs
+// are configured. The cleanup must be called when the session exits.
+type MCPConfigProvider func() (path string, cleanup func(), err error)
+
 // Compile-time proof that the production adapters satisfy the seams.
 var (
 	_ RunStore       = (*state.Store)(nil)

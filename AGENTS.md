@@ -149,6 +149,7 @@ Tool detection notes:
 ## API Surface (Local)
 
 Primary endpoints used by desktop sessions:
+- `GET /api/mcp` / `PUT /api/mcp` (list and replace MCP upstream registry; tokens stored encrypted)
 - `GET /api/settings` / `PUT /api/settings`
 - `GET /api/repos` / `POST /api/repos/discover` / `POST /api/repos/import`
 - `GET /api/sessions` / `POST /api/sessions`

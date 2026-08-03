@@ -14,6 +14,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -62,6 +63,12 @@ func runDesktop() error {
 		HideWindowOnClose: false,
 		AssetServer: &assetserver.Options{
 			Assets: frontendFS,
+		},
+		Mac: &mac.Options{
+			// Hidden inset: transparent titlebar, traffic lights visible and
+			// slightly inset, WebView fills the full window. The sidebar brand
+			// area accounts for the 36px offset via --titlebar-inset.
+			TitleBar: mac.TitleBarHiddenInset(),
 		},
 		OnStartup: app.startup,
 		Bind: []interface{}{

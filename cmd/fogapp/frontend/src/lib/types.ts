@@ -247,6 +247,28 @@ export const BOARD_WINDOWS: { id: BoardWindow; label: string; days: number | nul
     { id: "all", label: "All", days: null },
 ];
 
+// ── MCP servers ──
+
+export interface MCPUpstream {
+    name: string;
+    url: string;
+    has_token: boolean;
+}
+
+export interface MCPConfig {
+    upstreams: MCPUpstream[];
+}
+
+export interface UpdateMCPUpstream {
+    name: string;
+    url: string;
+    token?: string; // blank keeps the stored token unchanged
+}
+
+export interface UpdateMCPPayload {
+    upstreams: UpdateMCPUpstream[];
+}
+
 // ── Tracker sync ──
 
 export interface TrackerStatusMap {

@@ -9,6 +9,7 @@
     import ToggleField from "./settings/ToggleField.svelte";
     import RepoManager from "./settings/RepoManager.svelte";
     import TrackerSettings from "./settings/TrackerSettings.svelte";
+    import MCPSettings from "./settings/MCPSettings.svelte";
 
     let loading = $state(false);
 
@@ -214,11 +215,21 @@
         </section>
 
         <section class="st__sec reveal" style="--i: 4">
+            <h2 class="st__sec-title">MCP servers</h2>
+            <p class="st__sec-sub">
+                Connect external tools your agents can call. Credentials are
+                stored encrypted and forwarded by the local MCP proxy at
+                <code>/mcp</code>.
+            </p>
+            <MCPSettings />
+        </section>
+
+        <section class="st__sec reveal" style="--i: 5">
             <h2 class="st__sec-title">Task tracker</h2>
             <TrackerSettings />
         </section>
 
-        <section class="st__sec reveal" style="--i: 5">
+        <section class="st__sec reveal" style="--i: 6">
             <h2 class="st__sec-title">Repositories</h2>
             <RepoManager />
         </section>
@@ -274,6 +285,19 @@
         font-size: var(--text-md);
         padding-block-end: var(--space-2xs);
         border-block-end: var(--rule-hair) solid var(--color-rule);
+    }
+
+    .st__sec-sub {
+        font-size: var(--text-xs);
+        color: var(--color-ink-3);
+        line-height: var(--leading-body);
+        margin-block-start: calc(-1 * var(--space-2xs));
+    }
+
+    :global(.st__sec-sub code) {
+        font-family: var(--font-mono);
+        font-size: 0.9em;
+        color: var(--color-ink-2);
     }
 
     .st__fields {

@@ -15,6 +15,7 @@
     let submitting = $state(false);
     let activeTab = $state("timeline");
     let isWide = $state(false);
+    let panesEl = $state<HTMLElement | null>(null);
 
     const session = $derived(appState.detailSession);
     const runs = $derived(appState.detailRuns ?? []);
@@ -40,12 +41,16 @@
         if (isWide && activeTab === "timeline") activeTab = "diff";
     });
 
+    // Container query via ResizeObserver: the pane's own width, not the
+    // viewport — design.md requires this because panes resize independently
+    // of the window once the sidebar is present.
     $effect(() => {
-        const mq = window.matchMedia("(min-width: 100rem)");
-        const sync = () => (isWide = mq.matches);
-        sync();
-        mq.addEventListener("change", sync);
-        return () => mq.removeEventListener("change", sync);
+        if (!panesEl) return;
+        const obs = new ResizeObserver((entries) => {
+            isWide = (entries[0]?.contentRect.width ?? 0) >= 1200;
+        });
+        obs.observe(panesEl);
+        return () => obs.disconnect();
     });
 
     async function handleFollowup() {
@@ -144,7 +149,7 @@
             onOpenPR={openPR}
         />
 
-        <div class="sv__panes" class:is-split={isWide}>
+        <div class="sv__panes" class:is-split={isWide} bind:this={panesEl}>
             {#if isWide}
                 <!-- Ultrawide: the timeline stays visible while you read the
                      diff or the logs, instead of being tabbed away. -->
