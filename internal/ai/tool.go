@@ -100,9 +100,10 @@ func AvailableToolNames() []string {
 }
 
 // IsSandboxable reports whether the named tool has a container image published
-// by Fog and can run inside a Microsandbox microVM. Returns false for all tools
-// until images are published (Slice 5 of the sandbox integration).
-func IsSandboxable(_ string) bool { return false }
+// by Fog and can run inside a Microsandbox microVM.
+func IsSandboxable(name string) bool {
+	return normalizeToolName(name) == "claude"
+}
 
 func normalizeToolName(name string) string {
 	value := strings.ToLower(strings.TrimSpace(name))

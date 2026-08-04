@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -40,6 +41,18 @@ func Build(ctx context.Context, opts BuildOpts) (*App, error) {
 	// 2. Create runner with state store
 	r := runner.New(store)
 	r.SetBaseContext(ctx)
+
+	// Wire the VM sandbox backend. EnsureInstalled is a best-effort async
+	// download; failures are logged but do not prevent fogd from starting.
+	msb := runner.NewMicrosandboxBackend()
+	go func() {
+		if err := msb.EnsureReady(ctx); err != nil {
+			log.Printf("microsandbox: runtime not ready (sandbox runs will fail): %v", err)
+			return
+		}
+		r.SetSandboxBackend(msb)
+		log.Println("microsandbox: runtime ready")
+	}()
 
 	// Reconcile runs left non-terminal by a previous crash.
 	if err := r.ReconcileOnStart(); err != nil {
