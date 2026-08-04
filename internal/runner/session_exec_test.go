@@ -217,7 +217,7 @@ func TestExecuteSessionRunEmitsEventsInOrder(t *testing.T) {
 		t.Fatalf("executeSessionRun: %v", err)
 	}
 
-	want := []string{"setup", "ai_start", "ai_session", "ai_output", "complete"}
+	want := []string{"setup", "ai_start", "sandbox_tier", "ai_session", "ai_output", "complete"}
 	if got := store.eventTypes(); !equalStrings(got, want) {
 		t.Errorf("event transcript = %v, want %v", got, want)
 	}

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/darkLord19/foglet/internal/ai"
 	runpkg "github.com/darkLord19/foglet/internal/run"
 	"github.com/darkLord19/foglet/internal/sandbox"
 	"github.com/darkLord19/foglet/internal/state"
@@ -64,6 +65,15 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 	if strings.TrimSpace(run.WorktreePath) == "" {
 		return errors.New("run worktree path is required")
 	}
+	// Choose the isolation backend for this run. The VM backend is used only
+	// when sandbox_enabled is set, the tool has a published image, and the
+	// backend has been wired (SetSandboxBackend was called). Otherwise the
+	// host-guard path (nopBackend) is used, which is always safe.
+	activeBackend := r.backend
+	if r.sandboxEnabled() && ai.IsSandboxable(session.Tool) && r.sandbox != nil {
+		activeBackend = r.sandbox
+	}
+
 	ctx, cancel := context.WithCancel(r.baseCtx)
 	r.registerActiveRun(session.ID, run.ID, cancel)
 	defer func() {
@@ -71,7 +81,7 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 		cancel()
 		stopCtx, stopCancel := context.WithTimeout(r.baseCtx, 5*time.Second)
 		defer stopCancel()
-		_ = r.backend.Stop(stopCtx, session.ID)
+		_ = activeBackend.Stop(stopCtx, session.ID)
 	}()
 
 	fail := func(phase string, err error) error {
@@ -134,7 +144,12 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 			defer cleanup()
 		}
 	}
-	backendResult, err := r.backend.RunTool(ctx, sandbox.BackendRunRequest{
+	_ = r.runs.AppendRunEvent(state.RunEvent{
+		RunID:   run.ID,
+		Type:    "sandbox_tier",
+		Message: activeBackend.Name(),
+	})
+	backendResult, err := activeBackend.RunTool(ctx, sandbox.BackendRunRequest{
 		SessionID:      session.ID,
 		ToolName:       session.Tool,
 		WorktreePath:   run.WorktreePath,
