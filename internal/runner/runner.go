@@ -24,12 +24,17 @@ type Runner struct {
 	tools       ToolFactory
 	publisher   Publisher
 	mcpProvider MCPConfigProvider
-	backend     sandbox.Backend
-	baseCtx     context.Context
-	power       *power.Inhibitor
-	mu          sync.Mutex
-	active      map[string]*activeRun
-	sched       *scheduler
+	// backend is the always-available host-guard path (nopBackend).
+	backend sandbox.Backend
+	// sandbox is the VM isolation backend; nil until SetSandboxBackend is called.
+	// When sandbox_enabled is true and the tool is sandboxable, this is used
+	// instead of backend for session AI steps.
+	sandbox sandbox.Backend
+	baseCtx context.Context
+	power   *power.Inhibitor
+	mu      sync.Mutex
+	active  map[string]*activeRun
+	sched   *scheduler
 }
 
 // New creates a new runner. The state store st is optional (may be nil).
@@ -55,6 +60,13 @@ func New(st *state.Store) *Runner {
 	}
 	r.sched = newScheduler(r.baseCtx, r.runs, defaultMaxConcurrent(), 1)
 	return r
+}
+
+// SetSandboxBackend wires the VM isolation backend. Call this after New() when
+// the Microsandbox runtime is ready. Until called, every run uses the host-guard
+// path (nopBackend) regardless of the sandbox_enabled setting.
+func (r *Runner) SetSandboxBackend(b sandbox.Backend) {
+	r.sandbox = b
 }
 
 // SetMCPProvider wires the MCP config provider so agents started by this runner

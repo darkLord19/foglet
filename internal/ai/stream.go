@@ -216,6 +216,17 @@ func flattenText(value any, depth int) string {
 	return ""
 }
 
+// JSONStreamParser is exported so packages outside internal/ai (e.g.
+// internal/runner) can parse a Claude JSON stream without importing internal/ai
+// internals. It is a type alias; callers should construct via NewJSONStreamParser.
+type JSONStreamParser = streamJSONParser
+
+// NewJSONStreamParser constructs a JSONStreamParser. onChunk is called with
+// each decoded text fragment as it arrives; may be nil.
+func NewJSONStreamParser(onChunk func(string)) *JSONStreamParser {
+	return newStreamJSONParser(onChunk)
+}
+
 func looksLikeUnsupportedFlag(output string) bool {
 	value := strings.ToLower(strings.TrimSpace(output))
 	if value == "" {
