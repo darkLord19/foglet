@@ -11,6 +11,7 @@ import (
 	"github.com/darkLord19/foglet/internal/config"
 	"github.com/darkLord19/foglet/internal/git"
 	"github.com/darkLord19/foglet/internal/power"
+	"github.com/darkLord19/foglet/internal/sandbox"
 	"github.com/darkLord19/foglet/internal/state"
 )
 
@@ -23,6 +24,7 @@ type Runner struct {
 	tools       ToolFactory
 	publisher   Publisher
 	mcpProvider MCPConfigProvider
+	backend     sandbox.Backend
 	baseCtx     context.Context
 	power       *power.Inhibitor
 	mu          sync.Mutex
@@ -41,6 +43,7 @@ func New(st *state.Store) *Runner {
 		baseCtx:   context.Background(),
 		power:     power.New(),
 		active:    make(map[string]*activeRun),
+		backend:   &nopBackend{tools: ai.GetTool},
 	}
 	// Assigned only when non-nil: a nil *state.Store stored in an interface is
 	// itself non-nil, which would turn every nil-store guard into a panic.
@@ -73,6 +76,17 @@ func (r *Runner) keepAwakeEnabled() bool {
 		return false
 	}
 	val, found, err := r.settings.GetSetting("keep_awake")
+	if err != nil || !found {
+		return false
+	}
+	return val == "true"
+}
+
+func (r *Runner) sandboxEnabled() bool {
+	if r == nil || r.settings == nil {
+		return false
+	}
+	val, found, err := r.settings.GetSetting("sandbox_enabled")
 	if err != nil || !found {
 		return false
 	}

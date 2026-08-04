@@ -91,6 +91,7 @@ type SettingsResponse struct {
 	DefaultAutoPR      bool              `json:"default_autopr"`
 	DefaultNotify      bool              `json:"default_notify"`
 	KeepAwake          bool              `json:"keep_awake"`
+	SandboxEnabled     bool              `json:"sandbox_enabled"`
 	BranchPrefix       string            `json:"branch_prefix,omitempty"`
 	TrashRetentionDays int               `json:"trash_retention_days"`
 	GhInstalled        bool              `json:"gh_installed"`
@@ -100,13 +101,14 @@ type SettingsResponse struct {
 }
 
 type UpdateSettingsRequest struct {
-	DefaultTool   *string           `json:"default_tool"`
-	DefaultModel  *string           `json:"default_model"`
-	DefaultModels map[string]string `json:"default_models"`
-	DefaultAutoPR *bool             `json:"default_autopr"`
-	DefaultNotify *bool             `json:"default_notify"`
-	KeepAwake     *bool             `json:"keep_awake,omitempty"`
-	BranchPrefix  *string           `json:"branch_prefix"`
+	DefaultTool    *string           `json:"default_tool"`
+	DefaultModel   *string           `json:"default_model"`
+	DefaultModels  map[string]string `json:"default_models"`
+	DefaultAutoPR  *bool             `json:"default_autopr"`
+	DefaultNotify  *bool             `json:"default_notify"`
+	KeepAwake      *bool             `json:"keep_awake,omitempty"`
+	SandboxEnabled *bool             `json:"sandbox_enabled,omitempty"`
+	BranchPrefix   *string           `json:"branch_prefix"`
 	// TrashRetentionDays is how long trashed tasks stay recoverable. Must be
 	// at least 1; there is no "keep forever" — trash is temporary by design.
 	TrashRetentionDays *int `json:"trash_retention_days,omitempty"`
@@ -161,6 +163,9 @@ func (s *Server) getSettings(w http.ResponseWriter) {
 
 	if keepAwake, found, err := s.stateStore.GetSetting("keep_awake"); err == nil && found {
 		resp.KeepAwake = keepAwake == "true"
+	}
+	if sandbox, found, err := s.stateStore.GetSetting("sandbox_enabled"); err == nil && found {
+		resp.SandboxEnabled = sandbox == "true"
 	}
 
 	resp.OnboardingRequired = !resp.GhAuthenticated || strings.TrimSpace(resp.DefaultTool) == ""
@@ -233,6 +238,17 @@ func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 			val = "true"
 		}
 		if err := s.stateStore.SetSetting("keep_awake", val); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if req.SandboxEnabled != nil {
+		val := "false"
+		if *req.SandboxEnabled {
+			val = "true"
+		}
+		if err := s.stateStore.SetSetting("sandbox_enabled", val); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

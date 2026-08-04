@@ -380,11 +380,13 @@ func newTestRunnerWithPublisher(store *fakeRunStore, tool *fakeTool, settings fa
 	if settings == nil {
 		settings = fakeSettings{}
 	}
+	tf := toolFactory(tool)
 	return &Runner{
 		runs:      store,
 		settings:  settings,
-		tools:     toolFactory(tool),
+		tools:     tf,
 		publisher: pub,
+		backend:   &nopBackend{tools: tf},
 		baseCtx:   context.Background(),
 		power:     newSilentInhibitor(),
 		active:    map[string]*activeRun{},

@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	runpkg "github.com/darkLord19/foglet/internal/run"
+	"github.com/darkLord19/foglet/internal/sandbox"
 	"github.com/darkLord19/foglet/internal/state"
 	"github.com/darkLord19/foglet/internal/util"
 )
@@ -67,6 +69,9 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 	defer func() {
 		r.clearActiveRun(session.ID, run.ID)
 		cancel()
+		stopCtx, stopCancel := context.WithTimeout(r.baseCtx, 5*time.Second)
+		defer stopCancel()
+		_ = r.backend.Stop(stopCtx, session.ID)
 	}()
 
 	fail := func(phase string, err error) error {
@@ -121,15 +126,26 @@ func (r *Runner) executeSessionRun(session state.Session, run state.Run, opts se
 	})
 	streamWriter := newRunStreamWriter(r.runs, run.ID)
 	conversationID := r.lookupConversationID(session.ID, run.ID)
-	aiOutput, nextConversationID, err := r.runToolWithOptions(
-		ctx,
-		session.Tool,
-		run.WorktreePath,
-		opts.Prompt+commitMsgInstructions,
-		session.Model,
-		conversationID,
-		streamWriter.Append,
-	)
+
+	mcpFile := ""
+	if r.mcpProvider != nil {
+		if path, cleanup, merr := r.mcpProvider(); merr == nil {
+			mcpFile = path
+			defer cleanup()
+		}
+	}
+	backendResult, err := r.backend.RunTool(ctx, sandbox.BackendRunRequest{
+		SessionID:      session.ID,
+		ToolName:       session.Tool,
+		WorktreePath:   run.WorktreePath,
+		Prompt:         opts.Prompt + commitMsgInstructions,
+		Model:          session.Model,
+		ConversationID: conversationID,
+		MCPConfigFile:  mcpFile,
+		OnChunk:        streamWriter.Append,
+	})
+	aiOutput := backendResult.Output
+	nextConversationID := backendResult.ConversationID
 	streamWriter.Flush()
 	if err != nil {
 		if strings.TrimSpace(aiOutput) != "" {

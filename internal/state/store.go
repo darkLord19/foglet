@@ -13,11 +13,12 @@ import (
 )
 
 const (
-	defaultDBName      = "fog.db"
-	defaultKeyName     = "master.key"
-	githubPATKey       = "github_pat"
-	settingDefaultTool = "default_tool"
-	settingKeepAwake   = "keep_awake"
+	defaultDBName        = "fog.db"
+	defaultKeyName       = "master.key"
+	githubPATKey         = "github_pat"
+	settingDefaultTool   = "default_tool"
+	settingKeepAwake     = "keep_awake"
+	settingSandboxEnabled = "sandbox_enabled"
 )
 
 // SecretReader is a narrow interface for reading secrets.
