@@ -10,6 +10,7 @@
         isLast,
         outputEvents = [],
         inProgress,
+        sandboxTier,
         onselect,
     }: {
         run: RunSummary;
@@ -18,6 +19,7 @@
         isLast: boolean;
         outputEvents?: RunEvent[];
         inProgress: boolean;
+        sandboxTier?: string;
         onselect: () => void;
     } = $props();
 
@@ -50,10 +52,17 @@
             <time class="run__time mono" datetime={run.created_at}>
                 {formatRelativeTime(run.created_at)}
             </time>
-            <span class="badge badge--{statusKind}">
-                <span class="badge__dot" aria-hidden="true"></span>
-                {run.state.replace("AI_", "")}
-            </span>
+            <div class="run__badges">
+                {#if sandboxTier === "microsandbox"}
+                    <span class="badge badge--vm" title="Running inside a VM sandbox">
+                        VM Sandbox
+                    </span>
+                {/if}
+                <span class="badge badge--{statusKind}">
+                    <span class="badge__dot" aria-hidden="true"></span>
+                    {run.state.replace("AI_", "")}
+                </span>
+            </div>
         </header>
 
         <div class="blk">
@@ -144,6 +153,24 @@
         justify-content: space-between;
         gap: var(--space-sm);
         min-block-size: 1.75rem;
+    }
+
+    .run__badges {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2xs);
+    }
+
+    :global(.badge--vm) {
+        background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+        color: var(--color-accent);
+        border: var(--rule-hair) solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+        font-size: var(--text-2xs);
+        font-weight: 700;
+        letter-spacing: var(--tracking-label);
+        padding-inline: var(--space-xs);
+        padding-block: 2px;
+        border-radius: 2px;
     }
 
     .run__time {

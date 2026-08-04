@@ -22,6 +22,7 @@
     let defaultAutoPR = $state(appState.settings?.default_autopr || false);
     let defaultNotify = $state(appState.settings?.default_notify || false);
     let keepAwake = $state(appState.settings?.keep_awake || false);
+    let sandboxEnabled = $state(appState.settings?.sandbox_enabled || false);
     let branchPrefix = $state(appState.settings?.branch_prefix || "fog/");
 
     let availableModels = $derived(getModelsForTool(defaultTool));
@@ -55,6 +56,7 @@
                 default_autopr: defaultAutoPR,
                 default_notify: defaultNotify,
                 keep_awake: keepAwake,
+                sandbox_enabled: sandboxEnabled,
                 default_model: defaultModel,
                 default_models: defaultModels,
             };
@@ -158,6 +160,12 @@
                     bind:checked={keepAwake}
                     label="Keep this Mac awake"
                     description="Stops idle sleep while agents run. A closed lid with no external display still sleeps — that's Apple Silicon hardware behaviour no app can override."
+                />
+                <ToggleField
+                    id="sandbox-enabled"
+                    bind:checked={sandboxEnabled}
+                    label="Run agents in a VM sandbox"
+                    description="Isolates agent network and filesystem access inside a lightweight microVM (macOS 14+, Apple Silicon). Requires a one-time ~100 MB download on first use. Only applies to tools with a published sandbox image."
                 />
             </div>
         </section>

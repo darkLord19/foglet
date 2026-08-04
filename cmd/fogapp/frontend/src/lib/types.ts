@@ -59,6 +59,7 @@ export interface Settings {
     default_autopr: boolean;
     default_notify: boolean;
     keep_awake: boolean;
+    sandbox_enabled: boolean;
     branch_prefix?: string;
     trash_retention_days: number;
     gh_installed: boolean;
@@ -74,6 +75,7 @@ export interface UpdateSettingsPayload {
     default_autopr?: boolean;
     default_notify?: boolean;
     keep_awake?: boolean;
+    sandbox_enabled?: boolean;
     branch_prefix?: string;
     trash_retention_days?: number;
 }

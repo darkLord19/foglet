@@ -9,6 +9,16 @@
         appState.detailEvents.filter((e) => e.type === "ai_output"),
     );
 
+    /** sandbox_tier message keyed by run_id – "host" or "microsandbox" */
+    const sandboxTierByRun = $derived(
+        appState.detailEvents.reduce<Record<string, string>>((acc, e) => {
+            if (e.type === "sandbox_tier" && e.message) {
+                acc[e.run_id] = e.message;
+            }
+            return acc;
+        }, {}),
+    );
+
     function isTerminal(state: string) {
         switch (state.trim()) {
             case "COMPLETED":
@@ -38,6 +48,7 @@
                 outputEvents={run.id === appState.selectedRunID
                     ? aiOutputEvents
                     : []}
+                sandboxTier={sandboxTierByRun[run.id]}
                 onselect={() => (appState.selectedRunID = run.id)}
             />
         {/each}
