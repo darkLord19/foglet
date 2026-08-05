@@ -9,6 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/spf13/cobra v1.8.0
+	github.com/superradcompany/microsandbox/sdk/go v0.6.8
 	github.com/wailsapp/wails/v2 v2.11.0
 	golang.org/x/sync v0.17.0
 	golang.org/x/term v0.29.0
@@ -56,7 +57,6 @@ require (
 	github.com/sahilm/fuzzy v0.1.1-0.20230530133925-c48e322e2a8f // indirect
 	github.com/samber/lo v1.49.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/superradcompany/microsandbox/sdk/go v0.6.8 // indirect
 	github.com/tkrajina/go-reflector v0.5.8 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
